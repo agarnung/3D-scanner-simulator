@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Escáner 3D</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="stylesheet" href="src/styles/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/stats-js@1.0.1/build/stats.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <h2>Controles</h2>
+            
+            <div class="control-group">
+                <label for="model-selector">Modelo del objeto:</label>
+                <select id="model-selector">
+                    <option value="">Cargando modelos...</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <input type="file" id="model-upload" accept=".glb,.gltf,.obj,.stl" style="display: none;">
+                <button id="upload-model-btn" class="upload-button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; vertical-align: middle;">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="17 8 12 3 7 8"></polyline>
+                        <line x1="12" y1="3" x2="12" y2="15"></line>
+                    </svg>
+                    Cargar modelo
+                </button>
+            </div>
+
+            <div class="control-group">
+                <label for="scan-name">Nombre del escaneo:</label>
+                <input type="text" id="scan-name" placeholder="part01" value="part01">
+            </div>
+
+            <div class="button-group">
+                <button id="save-scan">Guardar Escaneo</button>
+                <button id="reload-config">Recargar Configuración</button>
+            </div>
+            
+
+            <div class="radio-group">
+                <p>Visualización</p>
+                <div class="toggle-group">
+                    <input type="radio" id="wireframe" name="viewmode" value="wireframe">
+                    <label for="wireframe">Wireframe</label>
+
+                    <input type="radio" id="mesh" name="viewmode" value="mesh" checked>
+                    <label for="mesh">Mesh</label>
+                </div>
+            </div>
+
+            <div class="button-group scan-controls">
+                <button id="start-scan" class="icon-button" title="Iniciar Escaneo">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                </button>
+                <button id="stop-scan" class="icon-button" title="Detener Escaneo">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <rect x="6" y="6" width="12" height="12"></rect>
+                    </svg>
+                </button>
+                <button id="reset-scan" class="icon-button" title="Reiniciar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M1 4v6h6"></path>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                        <path d="M23 20v-6h-6"></path>
+                        <path d="M20.49 9a9 9 0 1 0-2.13 9.36L23 14"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <fieldset class="scan-params-group">
+                <legend>Visualización del movimiento</legend>
+                <div class="control-group inline">
+                    <label for="realtime-speed">Velocidad:</label>
+                    <input type="range" id="realtime-speed" min="0.1" max="5" step="0.1" value="1.0">
+                    <span id="realtime-speed-display">1.0x</span>
+                </div>
+                <div class="button-group">
+                    <button id="start-realtime">Iniciar Visualización</button>
+                    <button id="stop-realtime">Detener Visualización</button>
+                </div>
+            </fieldset>
+
+            <fieldset class="scan-params-group">
+                <legend>Modo de Escaneo</legend>
+                <div class="control-group">
+                    <label for="surface-only-mode" title="Si está desactivado, escanea todas las caras (modo 'rayos X')">
+                        <input type="checkbox" id="surface-only-mode" checked>
+                        Modo superficie visible
+                    </label>
+                </div>
+            </fieldset>
+
+            <fieldset class="scan-params-group">
+                <legend>Edición Manual de Poses</legend>
+                <div class="control-group">
+                    <label for="edit-mode-toggle" title="Editar visualmente y guardar la posición y la rotación de objetos y/o sensores">
+                        <input type="checkbox" id="edit-mode-toggle">
+                        Activar modo edición
+                    </label>
+                </div>
+                <div class="control-group" id="edit-controls" style="display: none;">
+                    <label for="edit-target">Editar:</label>
+                    <select id="edit-target">
+                        <option value="object">Objeto</option>
+                    </select>
+                </div>
+                <div class="control-group" id="transform-mode-controls" style="display: none;">
+                    <label>Modo:</label>
+                    <div class="toggle-group">
+                        <input type="radio" id="transform-translate" name="transform-mode" value="translate" checked>
+                        <label for="transform-translate">Traslación</label>
+                        <input type="radio" id="transform-rotate" name="transform-mode" value="rotate">
+                        <label for="transform-rotate">Rotación</label>
+                    </div>
+                </div>
+                <div class="button-group" id="edit-buttons" style="display: none;">
+                    <button id="save-initial-pose">Guardar Pose Inicial</button>
+                </div>
+            </fieldset>
+        </div>
+        
+        <div class="main-view">
+            <div id="app"></div>       
+
+            <div class="info-panel">
+                <h3>Estado del Escaneo</h3>
+                <div id="scan-status">Detenido</div>
+                <div id="profile-count-display">Perfiles: 0</div>
+                <div id="point-count-display">Puntos totales: 0</div>
+            </div>  
+
+            <div class="canvas-section">
+                <div class="sensor-selector-container">
+                    <button id="sensor-prev" class="sensor-nav-btn" title="Sensor anterior">◀</button>
+                    <label for="canvas2d">Perfiles 1D - Sensor <span id="sensor-number">1</span>:</label>
+                    <button id="sensor-next" class="sensor-nav-btn" title="Sensor siguiente">▶</button>
+                </div>
+                <canvas id="canvas2d"></canvas>
+            </div>
+        </div>
+    
+        <!-- Pop-up de carga de modelo -->
+        <div id="loadingPopup" class="loading-popup">
+            <img src="https://i.gifer.com/ZZ5H.gif" alt="Cargando..." />
+            <p>Cargando modelo...</p>
+        </div>
+
+    </div>
+
+    <script type="module" src="src/scripts/main.js"></script>
+</body>
+</html>

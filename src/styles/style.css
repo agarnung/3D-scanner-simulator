@@ -1,0 +1,467 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f0f0f0;
+}
+
+.container {
+    display: flex;
+    height: 100vh;
+}
+
+.sidebar {
+    width: 300px;
+    background-color: #2c3e50;
+    color: white;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.sidebar h2 {
+    margin-bottom: 4px;
+    color: #ecf0f1;
+}
+
+.control-group {
+    margin-bottom: 4px;
+}
+
+.control-group label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: bold;
+}
+
+.control-group input[type="range"] {
+    width: 100%;
+    margin-bottom: 4px;
+}
+
+.control-group input[type="text"] {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #34495e;
+    border-radius: 4px;
+    background-color: #ecf0f1;
+    color: #2c3e50;
+}
+
+.button-group {
+    margin-bottom: 4px;
+}
+
+.button-group button {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 4px;
+    border: none;
+    border-radius: 4px;
+    background-color: #3498db;
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.button-group button:hover {
+    background-color: #2980b9;
+}
+
+.button-group button:active {
+    background-color: #21618c;
+}
+
+/* Botones de control de escaneo con iconos en horizontal */
+.button-group.scan-controls {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    margin-bottom: 4px;
+}
+
+.button-group.scan-controls button {
+    width: auto;
+    flex: 1;
+    margin-bottom: 4px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #3498db;
+    border: none;
+    border-radius: 4px;
+}
+
+.button-group.scan-controls button svg {
+    color: white;
+    stroke: white;
+    fill: white;
+}
+
+.button-group.scan-controls button#reset-scan svg {
+    fill: none;
+}
+
+.button-group.scan-controls button:hover {
+    background-color: #2980b9;
+}
+
+.button-group.scan-controls button:active {
+    background-color: #21618c;
+}
+
+.button-group.scan-controls button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: #95a5a6;
+}
+
+.upload-button {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 4px;
+    border: none;
+    border-radius: 4px;
+    background-color: #3498db;
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.upload-button:hover {
+    background-color: #2980b9;
+}
+
+.upload-button:active {
+    background-color: #21618c;
+}
+
+/* Panel de estado del escaneo encima y a la derecha */
+.info-panel {
+  position: absolute;
+  bottom: 15px;
+  right: 15px;
+  background-color: rgba(44, 62, 80, 0.7); /* Mismo color que .sidebar pero con transparencia */
+  padding: 15px 20px;
+  border-radius: 8px;
+  width: 200px;
+  color: white;
+  z-index: 10;
+  box-shadow: 0 0 10px rgba(0,0,0,0.5);
+}
+
+/* Ajustar textos para mejor visibilidad */
+.info-panel h3 {
+  margin-bottom: 4px;
+  font-size: 1.1rem;
+  color: #ecf0f1;
+}
+
+.info-panel div {
+  font-size: 0.9rem;
+  margin-bottom: 4px;
+  color: #ecf0f1;
+}
+
+.main-view {
+    flex: 1;
+    position: relative;
+    /* Prevenir arrastre de imagen del navegador */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    -webkit-user-drag: none;
+    -khtml-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+    user-drag: none;
+}
+
+#app {
+    width: 100%;
+    height: 100%;
+    /* Prevenir selección y arrastre en el canvas 3D */
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    -webkit-user-drag: none;
+    -khtml-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+    user-drag: none;
+    /* Asegurar que el canvas capture los eventos de mouse */
+    pointer-events: auto;
+    touch-action: none;
+}
+
+/* Prevenir arrastre en el canvas de Three.js */
+#app canvas {
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    -webkit-user-drag: none;
+    -khtml-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+    user-drag: none;
+    touch-action: none;
+    /* Asegurar que capture eventos de mouse */
+    pointer-events: auto;
+}
+
+#speed-value {
+    font-weight: bold;
+    color: #3498db;
+}
+
+#scan-status {
+    color: #e74c3c;
+    font-weight: bold;
+}
+
+.scan-params-group {
+    border: 1px solid #7f8c8d;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 4px;
+    color: #ecf0f1;
+}
+
+.scan-params-group legend {
+    font-size: 14px;
+    font-weight: bold;
+    padding: 0 10px;
+    color: #bdc3c7;
+}
+
+.control-group.inline {
+    display: flex;
+    flex-direction: column;
+    margin-right: 10px;
+    flex: 1;
+}
+
+.scan-params-group {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.sensor-selector-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 4px;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.sensor-selector-container label {
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.sensor-nav-btn {
+    background-color: transparent;
+    color: white;
+    border: none;
+    border-radius: 0;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    font-size: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.2s;
+    padding: 0;
+    margin: 0;
+    vertical-align: middle;
+    line-height: 1;
+}
+
+.sensor-nav-btn {
+    background-color: transparent;
+    color: white;
+    border: none;
+    border-radius: 0;
+    width: 30px;
+    height: 30px;
+    cursor: pointer;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.2s;
+    padding: 0;
+    margin: 0;
+}
+
+.sensor-nav-btn:hover {
+    opacity: 0.7;
+}
+
+.sensor-nav-btn:active {
+    opacity: 0.5;
+}
+
+.sensor-nav-btn:disabled {
+    background-color: #95a5a6;
+    cursor: not-allowed;
+}
+
+.canvas-section {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+    z-index: 5;
+}
+
+.canvas-section label {
+    font-weight: bold;
+    color: #c5c8cd;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+#canvas2d {
+    width: 324px;
+    height: 324px;
+    cursor: crosshair;
+    border-radius: 10px;
+    box-shadow: 0 0 25px rgba(255, 255, 255, 0.5);
+    background-color: rgba(20, 23, 21, 0.5);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transform-origin: 100% 0%;
+}
+
+#canvas2d:hover {
+    transform: scale(2.0);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.85);
+    background-color: rgba(20, 23, 21, 0.75);
+}
+
+/* Estilo para selectores, como el selector de modelos model-selector */
+.control-group select {
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 4px;
+    border: 1px solid #34495e;
+    border-radius: 4px;
+    background-color: #34495e;
+    color: #ecf0f1;
+    font-size: 14px;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23ecf0f1'%3e%3cpath d='M7 10l5 5 5-5z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    background-size: 15px;
+    transition: all 0.3s ease;
+}
+
+.control-group select:hover {
+    background-color: #3d566e;
+    border-color: #4a6a86;
+}
+
+.control-group select:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.3);
+}
+
+/* Para las opciones del selector */
+.control-group select option {
+    padding: 10px;
+    background-color: #2c3e50;
+    color: #ecf0f1;
+}
+
+/* Para cuando está deshabilitado */
+.control-group select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background-color: #3d566e;
+}
+
+.loading-popup {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: none;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.5); 
+  color: white;
+  font-size: 1.5rem;
+  z-index: 9999;
+  flex-direction: column; 
+  align-items: center;    
+  gap: 10px; 
+}
+
+.loading-popup.active {
+  display: flex;  /* La clase active lo muestra centrado; si no hay esta clase, display es none */
+}
+
+.loading-popup img {
+  width: 80px; 
+  height: 80px;
+}
+
+.radio-group {
+    margin-bottom: 4px;
+}
+
+.toggle-group {
+    display: flex;
+    justify-content: center; 
+}
+
+.toggle-group {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 4px;
+    margin-top: 10px;
+}
+
+.toggle-group input[type="radio"] {
+    display: none;
+}
+
+.toggle-group label {
+    padding: 10px 20px;
+    background-color: #ddd;
+    border-radius: 6px;
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.toggle-group input[type="radio"]:checked + label {
+    background-color: #007bff;
+    color: white;
+}

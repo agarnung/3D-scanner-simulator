@@ -1,0 +1,7 @@
+build/*
+CMakeLists.txt.user
+*.Identifier
+node_modules/*
+public/*
+assets/models/*
+.venv/*

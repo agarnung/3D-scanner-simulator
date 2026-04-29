@@ -3,5 +3,15 @@ CMakeLists.txt.user
 *.Identifier
 node_modules/*
 public/*
+!public/favicon.ico
+!public/configs/
+public/configs/*
+!public/configs/simulator.example.yaml
+!public/configs/simulator.yaml
+!public/models/
+public/models/*
+!public/models/cube.stl
+!public/models/gocator.glb
+!public/models/wheel_basic.glb
 assets/models/*
 .venv/*

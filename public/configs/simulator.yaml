@@ -1,0 +1,101 @@
+scene:
+  backgroundColor: '#222222'
+  fog:
+    color: '#aaaaaa'
+    near: 1
+    far: 100
+camera:
+  fov: 25
+  near: 0.01
+  far: 100
+  position:
+    - 0
+    - 0
+    - 10
+  lookAt:
+    - 0
+    - 0
+    - 0
+lights:
+  - type: ambient
+    color: '#ffffff'
+    intensity: 0.5
+  - type: directional
+    color: '#ffffff'
+    intensity: 0.8
+    position:
+      - 10
+      - 10
+      - 10
+  - type: directional
+    color: '#ffffff'
+    intensity: 0.2
+    position:
+      - -15
+      - -5
+      - -15
+models:
+  object: /models/wheel_basic.glb
+  scale: 1
+sensors:
+  - id: sensor_1
+    model: /models/gocator.glb
+    pointsPerProfile: 1024
+    pose:
+      position:
+        - -0.039591230085778945
+        - -0.03240891103092142
+        - 0
+      rotation:
+        - 180
+        - 0
+        - 0
+    roi:
+      yMax: 0.1
+      yMin: -0.05
+      x0: -0.12
+      x1: -0.15
+      x2: 0.15
+      x3: 0.12
+    movements: []
+  - id: sensor_2
+    model: /models/gocator.glb
+    pointsPerProfile: 1024
+    pose:
+      position:
+        - 0
+        - -0.5
+        - 0
+      rotation:
+        - 0
+        - 0
+        - 0
+    roi:
+      yMax: 0.1
+      yMin: -0.05
+      x0: -0.12
+      x1: -0.15
+      x2: 0.15
+      x3: 0.12
+    movements: []
+object:
+  initialPose:
+    position:
+      - 0.0005510130574253314
+      - -0.06317817433361314
+      - 0.007241998608868483
+    rotation:
+      - -179.72739801531284
+      - -23.50298126678855
+      - -6.715757380802334
+  movements:
+    - type: rotation
+      axis: x
+      value: 360
+      duration: 4096
+      startProfile: 0
+simulation:
+  intersectionMethod: face
+  defaultRotationDeg: 360
+  defaultProfiles: 4096
+  offsetZ: 0.001

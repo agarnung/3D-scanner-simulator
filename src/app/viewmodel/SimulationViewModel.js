@@ -127,7 +127,7 @@ export default class SimulationViewModel {
 
         // Aplicar pose inicial del objeto desde la configuración
         const objectConfig = this.config.object || {};
-        const initialPose = objectConfig.initialPose || { position: [0, -0.25, 0], rotation: [0, 0, 0] };
+        const initialPose = objectConfig.initialPose || { position: [0, -0.25, 0], rotation: [0, 0, 0], scale: [1, 1, 1] };
         
         model.position.set(...initialPose.position);
         model.rotation.set(
@@ -135,6 +135,10 @@ export default class SimulationViewModel {
           THREE.MathUtils.degToRad(initialPose.rotation[1] || 0),
           THREE.MathUtils.degToRad(initialPose.rotation[2] || 0)
         );
+        const initialScale = Array.isArray(initialPose.scale) && initialPose.scale.length === 3
+          ? initialPose.scale
+          : [1, 1, 1];
+        model.scale.set(initialScale[0], initialScale[1], initialScale[2]);
         
         this.object = {
           mesh: model,
@@ -143,12 +147,14 @@ export default class SimulationViewModel {
         // Guardar pose inicial y movimientos (convertir a formato compatible con TransformationService)
         this.objectInitialPose = {
           position: model.position.clone(),
-          rotation: model.rotation.clone()
+          rotation: model.rotation.clone(),
+          scale: model.scale.clone()
         };
         // Guardar también la pose original (que nunca cambia)
         this.objectOriginalInitialPose = {
           position: model.position.clone(),
-          rotation: model.rotation.clone()
+          rotation: model.rotation.clone(),
+          scale: model.scale.clone()
         };
         this.objectMovements = objectConfig.movements || [];
         
@@ -309,7 +315,8 @@ export default class SimulationViewModel {
     if (!this.objectInitialPose) {
       this.objectInitialPose = {
         position: this.object.mesh.position.clone(),
-        rotation: this.object.mesh.rotation.clone()
+        rotation: this.object.mesh.rotation.clone(),
+        scale: this.object.mesh.scale.clone()
       };
       // También guardar en formato simple
       this.objectInitialPoseSimple = {
@@ -337,6 +344,7 @@ export default class SimulationViewModel {
       );
       this.object.mesh.position.copy(objectPose.position);
       this.object.mesh.rotation.copy(objectPose.rotation);
+      if (this.objectInitialPose.scale) this.object.mesh.scale.copy(this.objectInitialPose.scale);
       this.object.mesh.updateMatrixWorld();
       
       // También restaurar sensores a la posición correcta
@@ -349,7 +357,8 @@ export default class SimulationViewModel {
     // Guardar la pose inicial del objeto para restaurar después (solo si se completa)
     const initialObjectPose = {
       position: this.objectInitialPose.position.clone(),
-      rotation: this.objectInitialPose.rotation.clone()
+      rotation: this.objectInitialPose.rotation.clone(),
+      scale: this.objectInitialPose.scale ? this.objectInitialPose.scale.clone() : this.object.mesh.scale.clone()
     };
 
     try {
@@ -368,6 +377,7 @@ export default class SimulationViewModel {
         // Aplicar la pose calculada al objeto
         this.object.mesh.position.copy(objectPose.position);
         this.object.mesh.rotation.copy(objectPose.rotation);
+        if (this.objectInitialPose.scale) this.object.mesh.scale.copy(this.objectInitialPose.scale);
         this.object.mesh.updateMatrixWorld();
 
         // Escanear con cada sensor
@@ -444,6 +454,7 @@ export default class SimulationViewModel {
       if (this.object && this.object.mesh) {
         this.object.mesh.position.copy(initialObjectPose.position);
         this.object.mesh.rotation.copy(initialObjectPose.rotation);
+        if (initialObjectPose.scale) this.object.mesh.scale.copy(initialObjectPose.scale);
         this.object.mesh.updateMatrixWorld();
       }
       
@@ -591,7 +602,8 @@ export default class SimulationViewModel {
     if (!this.objectInitialPose) {
       this.objectInitialPose = {
         position: this.object.mesh.position.clone(),
-        rotation: this.object.mesh.rotation.clone()
+        rotation: this.object.mesh.rotation.clone(),
+        scale: this.object.mesh.scale.clone()
       };
     }
 
@@ -688,6 +700,7 @@ export default class SimulationViewModel {
     if (this.object.mesh) {
       this.object.mesh.position.copy(objectPose.position);
       this.object.mesh.rotation.copy(objectPose.rotation);
+      if (this.objectInitialPose.scale) this.object.mesh.scale.copy(this.objectInitialPose.scale);
       this.object.mesh.updateMatrixWorld();
     }
 
@@ -710,12 +723,14 @@ export default class SimulationViewModel {
     if (this.object && this.objectInitialPose) {
       this.object.mesh.position.copy(this.objectInitialPose.position);
       this.object.mesh.rotation.copy(this.objectInitialPose.rotation);
+      if (this.objectInitialPose.scale) this.object.mesh.scale.copy(this.objectInitialPose.scale);
       this.object.mesh.updateMatrixWorld();
     } else if (this.object && this.object.mesh) {
       // Si no hay pose inicial guardada, usar la pose actual como inicial
       this.objectInitialPose = {
         position: this.object.mesh.position.clone(),
-        rotation: this.object.mesh.rotation.clone()
+        rotation: this.object.mesh.rotation.clone(),
+        scale: this.object.mesh.scale.clone()
       };
     }
 

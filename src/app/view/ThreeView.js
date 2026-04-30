@@ -258,6 +258,11 @@ export default class ThreeView {
       }
     }
     
+    // La escala está permitida solo para el objeto principal.
+    if (target.startsWith('sensor_') && this.transformControls.getMode() === 'scale') {
+      this.transformControls.setMode('translate');
+    }
+
     if (mesh) {
       // Asegurar que el mesh tenga renderOrder correcto para que los controles se vean
       if (mesh.material) {
@@ -315,6 +320,11 @@ export default class ThreeView {
         THREE.MathUtils.radToDeg(mesh.rotation.x),
         THREE.MathUtils.radToDeg(mesh.rotation.y),
         THREE.MathUtils.radToDeg(mesh.rotation.z)
+      ],
+      scale: [
+        mesh.scale.x,
+        mesh.scale.y,
+        mesh.scale.z
       ]
     };
   }

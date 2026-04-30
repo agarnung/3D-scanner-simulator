@@ -1,84 +1,120 @@
-// TODO
+import * as THREE from 'three';
 
-// Emular un sensor de triangulación láser lineal de forma coherente, de modo que:
+export default class RaycastingIntersectionService {
+  static yMaxAOI = 0.05;
+  static yMinAOI = -0.025;
+  static x0AOI = -0.15;
+  static x1AOI = -0.135;
+  static x2AOI = 0.135;
+  static x3AOI = 0.15;
 
-// Cada perfil generado tenga el mismo número de puntos,
+  static EPS = 1e-6;
 
-// Los puntos estén uniformemente distribuidos en el espacio de escaneo,
+  static intersectLaserProfile(objectMesh, sensor, pointsPerProfile = 300, surfaceOnlyMode = true) {
+    if (!objectMesh || !sensor) {
+      console.warn('RaycastingIntersectionService: faltan objectMesh o sensor');
+      return [];
+    }
 
-// Y el punto i de un perfil corresponda aproximadamente al punto i del siguiente perfil en cuanto a su posición relativa, aunque estés "perdiendo" la coordenada real exacta.
+    const roi = sensor?.roi || {
+      yMax: this.yMaxAOI,
+      yMin: this.yMinAOI,
+      x0: this.x0AOI,
+      x1: this.x1AOI,
+      x2: this.x2AOI,
+      x3: this.x3AOI
+    };
 
-// ✅ Enfoque recomendado para simular perfiles uniformes de un sensor de triangulación
-// Para lograrlo de forma fidedigna, aquí tienes un plan sólido:
+    // 1) Discretizar el perfil en N muestras uniformes a lo largo del ancho útil (X local).
+    const samples = Math.max(1, Number(pointsPerProfile) || 1);
+    const xStart = roi.x0;
+    const xEnd = roi.x3;
+    const xRange = xEnd - xStart;
+    const xStep = samples > 1 ? xRange / (samples - 1) : 0;
 
-// 1. Definir una ventana de escaneo (plano de corte)
-// Establece un plano perpendicular al eje de rotación (Z, por ejemplo) que simula la línea del láser. A lo largo de ese plano:
+    // 2) Lanzar rayos paralelos en -Y local desde una línea de origen por encima de la ROI.
+    // Así emulamos un perfilómetro lineal que barre de forma consistente cada columna del perfil.
+    const yOriginLocal = roi.yMax + Math.max(1e-3, (roi.yMax - roi.yMin) * 0.25);
+    const rayLength = Math.max(1.0, (roi.yMax - roi.yMin) * 40);
 
-// Define un rango físico de escaneo (por ejemplo, de -20 mm a +20 mm en el eje Y)
+    const rotation = sensor.currentPose.rotation;
+    const sensorPosition = sensor.currentPose.position;
 
-// Divide ese rango en N muestras fijas, por ejemplo 512
+    const directionLocal = new THREE.Vector3(0, -1, 0);
+    const directionWorld = directionLocal.clone().applyEuler(rotation).normalize();
 
-// js
-// const scanRangeY = [-0.02, 0.02]; // en metros, i.e. ±20 mm
-// const pointsPerProfile = 512;
-// 2. Trazar rayos (raycasting) desde el sensor a lo largo del eje X o Z
-// Para cada uno de los 512 puntos del perfil:
+    const raycaster = new THREE.Raycaster();
+    raycaster.firstHitOnly = true;
+    raycaster.near = 0;
+    raycaster.far = rayLength;
 
-// Calcula la posición Y dentro del rango.
+    const profilePoints = [];
 
-// Emite un rayo desde la posición del sensor hacia el objeto (por ejemplo, en dirección -X si el láser escanea en esa dirección).
+    for (let i = 0; i < samples; i++) {
+      const xLocal = xStart + xStep * i;
+      const originLocal = new THREE.Vector3(xLocal, yOriginLocal, 0);
+      const originWorld = originLocal.clone().applyEuler(rotation).add(sensorPosition);
 
-// Guarda el punto de intersección si hay uno.
+      raycaster.set(originWorld, directionWorld);
+      const hits = raycaster.intersectObject(objectMesh, true);
+      if (!hits || hits.length === 0) continue;
 
-// Ventaja: Esto fuerza que siempre se generen los mismos N puntos por perfil, aunque algunos puntos pueden ser null o NaN si no hay intersección.
+      // 3) Selección de intersección según modo:
+      // - superficie visible: primera colisión (frente visible)
+      // - rayos X: primera + última colisión (entrada + salida), si son distintas
+      const candidateHits = surfaceOnlyMode
+        // Modo visible: primera colisión a lo largo del rayo emitido.
+        ? [hits[0]]
+        // Modo rayos X: entrada + salida a lo largo del mismo rayo.
+        : [hits[0], hits[hits.length - 1]];
 
-// 3. Interpolar o extrapolar si no hay intersección
-// Si para alguna muestra no hay intersección con el objeto:
+      for (let hitIndex = 0; hitIndex < candidateHits.length; hitIndex++) {
+        const candidate = candidateHits[hitIndex];
+        if (!candidate?.point) continue;
 
-// Puedes dejar el punto como null, NaN, o extrapolar linealmente desde los vecinos.
+        const hitPointWorld = candidate.point;
+        // 4) Validación final en ROI (en sistema local del sensor) para evitar fugas geométricas.
+        const hitPointLocal = this.transformToSensorLocal(hitPointWorld, sensor);
+        if (!this.isPointInsideROI(hitPointLocal, roi)) continue;
 
-// También puedes rellenar con un valor muy lejano (como haría un sensor real si no detecta nada).
+        // Evitar duplicados cuando solo hay una colisión real (primera == última).
+        const isDuplicated =
+          hitIndex > 0 &&
+          profilePoints.length > 0 &&
+          profilePoints[profilePoints.length - 1].distanceToSquared(hitPointWorld) < this.EPS * this.EPS;
+        if (isDuplicated) continue;
 
-// 4. Perder información espacial real (si así lo quieres)
-// Una vez que tengas los perfiles, puedes:
+        profilePoints.push(hitPointWorld.clone());
+      }
+    }
 
-// Descartar las coordenadas 3D originales y quedarte solo con una matriz P[i][j] donde i es el número de perfil (posición angular) y j es el punto a lo largo del láser (posición transversal).
+    return profilePoints;
+  }
 
-// De esta forma, el punto P[i][j] representa la “altura” o “profundidad” escaneada en la posición (perfil i, rayo j).
+  static isPointInsideROI(ptLocal, roi) {
+    if (ptLocal.y < roi.yMin - this.EPS || ptLocal.y > roi.yMax + this.EPS) return false;
 
-// Esto es exactamente lo que hacen los sensores industriales cuando devuelven una matriz 2D de profundidad o intensidad.
+    const yRange = roi.yMax - roi.yMin;
+    if (Math.abs(yRange) < this.EPS) return false;
 
-// 💡 Servicio de perfilado (idea general)
-// Puedes encapsular todo esto en un servicio TriangulationSensorEmulatorService que reciba:
+    const xSlopeLeft = (roi.x1 - roi.x0) / yRange;
+    const xSlopeRight = (roi.x2 - roi.x3) / yRange;
+    const xLeft = roi.x0 + xSlopeLeft * (ptLocal.y - roi.yMin);
+    const xRight = roi.x3 + xSlopeRight * (ptLocal.y - roi.yMin);
 
-// El objeto mesh
+    return ptLocal.x >= (xLeft - this.EPS) && ptLocal.x <= (xRight + this.EPS);
+  }
 
-// El número de puntos por perfil
+  static transformToSensorLocal(pointWorld, sensor) {
+    if (!sensor || !sensor.currentPose) return pointWorld.clone();
 
-// La dirección de escaneo
+    const pointLocal = pointWorld.clone();
+    pointLocal.sub(sensor.currentPose.position);
 
-// El rango de escaneo
-
-// (Opcional) la posición y orientación del sensor
-
-// Y devuelva siempre un array de N puntos (por perfil), con coordenadas 3D o null.
-
-// Resultado: estructura de datos uniforme
-// Esto te dará un resultado como:
-
-// js
-// [
-//   [p0_0, p0_1, ..., p0_511],  // perfil 0
-//   [p1_0, p1_1, ..., p1_511],  // perfil 1
-//   ...
-// ]
-// donde cada pX_Y es un { x, y, z } o null.
-
-// ¿Quieres que te lo programe como un servicio TriangulationSensorEmulatorService.js para tu proyecto actual?
-// Puedo hacerlo con:
-
-// Entrada: objeto mesh, número de puntos por perfil, dirección del láser, rango.
-
-// Salida: perfil uniforme de N puntos.
-
-// ¿Confirmas los detalles o deseas modificar alguno?
+    const inverseQuat = new THREE.Quaternion()
+      .setFromEuler(sensor.currentPose.rotation)
+      .invert();
+    pointLocal.applyQuaternion(inverseQuat);
+    return pointLocal;
+  }
+}

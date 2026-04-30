@@ -3,13 +3,15 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
+import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
 
 export default class ModelLoader {
   constructor() {
     this.loaders = {
       gltf: new GLTFLoader(),
       stl: new STLLoader(),
-      obj: new OBJLoader()
+      obj: new OBJLoader(),
+      ply: new PLYLoader()
     };
   }
 
@@ -83,6 +85,17 @@ export default class ModelLoader {
         case 'stl':
           this.loaders.stl.load(path, (geometry) => {
             // STLLoader devuelve una geometría, necesitamos crear un mesh
+            const material = new THREE.MeshStandardMaterial({ color: 0xffffff });
+            const mesh = new THREE.Mesh(geometry, material);
+            applyScale(mesh);
+            resolve(mesh);
+          }, undefined, reject);
+          break;
+
+        case 'ply':
+          this.loaders.ply.load(path, (geometry) => {
+            // PLYLoader devuelve una geometría, necesitamos crear un mesh
+            geometry.computeVertexNormals();
             const material = new THREE.MeshStandardMaterial({ color: 0xffffff });
             const mesh = new THREE.Mesh(geometry, material);
             applyScale(mesh);

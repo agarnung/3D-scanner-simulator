@@ -75,7 +75,7 @@ export default defineConfig({
                   const filePath = join(modelsDir, file)
                   // Filtrar archivos que sean modelos válidos y no sean el modelo del sensor (gocator)
                   return statSync(filePath).isFile() && 
-                         /\.(glb|gltf|obj|stl|fbx)$/i.test(file) &&
+                         /\.(glb|gltf|obj|stl|ply|fbx)$/i.test(file) &&
                          !/gocator/i.test(file)
                 } catch {
                   return false
@@ -140,7 +140,7 @@ export default defineConfig({
       }
     }
   ],
-  assetsInclude: ['**/*.glb', '**/*.gltf', '**/*.stl', '**/*.obj', '**/*.fbx'],
+  assetsInclude: ['**/*.glb', '**/*.gltf', '**/*.stl', '**/*.obj', '**/*.ply', '**/*.fbx'],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

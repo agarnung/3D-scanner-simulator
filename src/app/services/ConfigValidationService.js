@@ -119,6 +119,13 @@ export default class ConfigValidationService {
       if (!Array.isArray(object.initialPose.rotation) || object.initialPose.rotation.length !== 3) {
         errors.push('Objeto: \'initialPose.rotation\' debe ser un array de 3 elementos [rotX, rotY, rotZ]');
       }
+      if (object.initialPose.scale !== undefined) {
+        if (!Array.isArray(object.initialPose.scale) || object.initialPose.scale.length !== 3) {
+          errors.push('Objeto: \'initialPose.scale\' debe ser un array de 3 elementos [sx, sy, sz]');
+        } else if (object.initialPose.scale.some(s => typeof s !== 'number' || s <= 0)) {
+          errors.push('Objeto: \'initialPose.scale\' debe contener valores numéricos positivos');
+        }
+      }
     }
 
     if (object.movements && Array.isArray(object.movements)) {
@@ -171,8 +178,8 @@ export default class ConfigValidationService {
   static validateSimulation(simulation) {
     const errors = [];
 
-    if (simulation.intersectionMethod && !['edge', 'face'].includes(simulation.intersectionMethod)) {
-      errors.push('Simulación: \'intersectionMethod\' debe ser \'edge\' o \'face\'');
+    if (simulation.intersectionMethod && !['edge', 'face', 'raycasting'].includes(simulation.intersectionMethod)) {
+      errors.push('Simulación: \'intersectionMethod\' debe ser \'edge\', \'face\' o \'raycasting\'');
     }
 
     if (simulation.defaultRotationDeg !== undefined && (typeof simulation.defaultRotationDeg !== 'number' || simulation.defaultRotationDeg <= 0)) {
@@ -181,6 +188,10 @@ export default class ConfigValidationService {
 
     if (simulation.defaultProfiles !== undefined && (typeof simulation.defaultProfiles !== 'number' || simulation.defaultProfiles <= 0)) {
       errors.push('Simulación: \'defaultProfiles\' debe ser un número positivo');
+    }
+
+    if (simulation.visibilityPrefilterEnabled !== undefined && typeof simulation.visibilityPrefilterEnabled !== 'boolean') {
+      errors.push('Simulación: \'visibilityPrefilterEnabled\' debe ser booleano');
     }
 
     return errors;

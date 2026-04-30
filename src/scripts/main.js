@@ -4,6 +4,36 @@ import ConfigValidationService from '../app/services/ConfigValidationService.js'
 
 import jsyaml from 'js-yaml';
 
+const INTERSECTION_METHODS = {
+    edge: {
+        label: 'Edge',
+        description: 'Interseccion plano-aristas. Rapido y aproximado.'
+    },
+    face: {
+        label: 'Face',
+        description: 'Interseccion plano-caras. Mas denso y detallado.'
+    },
+    raycasting: {
+        label: 'Raycasting',
+        description: 'Rayos por muestra. Mejor oclusion/superficie visible.'
+    }
+};
+
+async function loadIntersectionServiceByMethod(method) {
+    if (method === 'face') {
+        const { default: service } = await import('../app/services/FacePlaneIntersectionService.js');
+        return service;
+    }
+
+    if (method === 'raycasting') {
+        const { default: service } = await import('../app/services/RaycastingIntersectionService.js');
+        return service;
+    }
+
+    const { default: service } = await import('../app/services/EdgePlaneIntersectionService.js');
+    return service;
+}
+
 // Funciones de popup de carga (deben estar antes de initializeApp)
 let loadingShown = false;
 let popup = null; // Se inicializará después de que el DOM esté listo
@@ -41,6 +71,49 @@ async function loadConfig() {
     
     const yamlText = await response.text();
     return jsyaml.load(yamlText);
+}
+
+async function saveIntersectionMethodToYAML(method) {
+    const currentConfig = await loadConfig();
+    currentConfig.simulation = currentConfig.simulation || {};
+    currentConfig.simulation.intersectionMethod = method;
+
+    const response = await fetch('/api/save-config', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(currentConfig)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Error al guardar método de intersección: ${response.statusText}`);
+    }
+}
+
+async function saveVisibilityPrefilterToYAML(enabled) {
+    const currentConfig = await loadConfig();
+    currentConfig.simulation = currentConfig.simulation || {};
+    currentConfig.simulation.visibilityPrefilterEnabled = !!enabled;
+
+    const response = await fetch('/api/save-config', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(currentConfig)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Error al guardar prefiltro de visibilidad: ${response.statusText}`);
+    }
+}
+
+function applyVisibilityPrefilterSettingToService(serviceClass, enabled) {
+    if (!serviceClass) return;
+    if (Object.prototype.hasOwnProperty.call(serviceClass, 'enableVisibilityPrefilter')) {
+        serviceClass.enableVisibilityPrefilter = !!enabled;
+    }
 }
 
 // Cargar lista de modelos disponibles dinámicamente desde el servidor
@@ -119,18 +192,14 @@ async function initializeApp() {
     validation.warnings.forEach(warning => console.warn(`  - ${warning}`));
   }
 
-  // Importar el servicio de intersección según la configuración
-  let IntersectionService;
-  if (config.simulation.intersectionMethod === 'edge') {
-    console.log('Cargando servicio: EdgePlaneIntersectionService');
-    ({ default: IntersectionService } = await import('../app/services/EdgePlaneIntersectionService.js'));
-  } else if (config.simulation.intersectionMethod === 'face') {
-    console.log('Cargando servicio: FacePlaneIntersectionService');
-    ({ default: IntersectionService } = await import('../app/services/FacePlaneIntersectionService.js'));
-  } else {
-    console.warn('Método de intersección no soportado, usando EdgePlaneIntersectionService por defecto');
-    ({ default: IntersectionService } = await import('../app/services/EdgePlaneIntersectionService.js'));
+  const requestedMethod = config.simulation?.intersectionMethod || 'edge';
+  const selectedMethod = INTERSECTION_METHODS[requestedMethod] ? requestedMethod : 'edge';
+  if (requestedMethod !== selectedMethod) {
+    console.warn(`Metodo de interseccion no soportado: ${requestedMethod}. Se usa "${selectedMethod}"`);
   }
+  const IntersectionService = await loadIntersectionServiceByMethod(selectedMethod);
+  config.simulation = config.simulation || {};
+  config.simulation.intersectionMethod = selectedMethod;
 
   const appContainer = document.getElementById('app');
   const viewModel = new SimulationViewModel({
@@ -220,14 +289,11 @@ async function loadDefaultModels(currentConfig, currentViewModel) {
         currentViewModel.config = freshConfig;
         
         // Recargar servicio de intersección si cambió el método
-        let IntersectionService;
-        if (freshConfig.simulation.intersectionMethod === 'edge') {
-            ({ default: IntersectionService } = await import('../app/services/EdgePlaneIntersectionService.js'));
-        } else if (freshConfig.simulation.intersectionMethod === 'face') {
-            ({ default: IntersectionService } = await import('../app/services/FacePlaneIntersectionService.js'));
-        } else {
-            ({ default: IntersectionService } = await import('../app/services/EdgePlaneIntersectionService.js'));
-        }
+        const requestedMethod = freshConfig.simulation?.intersectionMethod || 'edge';
+        const selectedMethod = INTERSECTION_METHODS[requestedMethod] ? requestedMethod : 'edge';
+        const IntersectionService = await loadIntersectionServiceByMethod(selectedMethod);
+        freshConfig.simulation = freshConfig.simulation || {};
+        freshConfig.simulation.intersectionMethod = selectedMethod;
         currentViewModel.intersectionService = IntersectionService;
         
         // Cargar objeto (elimina el anterior si existe)
@@ -331,7 +397,10 @@ function setupEventListeners() {
     const saveInitialPoseBtn = document.getElementById('save-initial-pose');
     const transformModeControls = document.getElementById('transform-mode-controls');
     const transformModeRadios = document.querySelectorAll('input[name="transform-mode"]');
+    const transformScaleRadio = document.getElementById('transform-scale');
     const surfaceOnlyModeCheckbox = document.getElementById('surface-only-mode');
+    const visibilityPrefilterToggle = document.getElementById('visibility-prefilter-toggle');
+    const intersectionMethodSelect = document.getElementById('intersection-method-selector');
 
     // Cargar valores por defecto desde la configuración
     if (config.simulation && viewModel) {
@@ -457,11 +526,11 @@ modelUploadInput.addEventListener('change', async (e) => {
     if (!file) return;
 
     // Validar extensión del archivo
-    const validExtensions = ['.glb', '.gltf', '.obj', '.stl'];
+    const validExtensions = ['.glb', '.gltf', '.obj', '.stl', '.ply'];
     const fileExtensionWithDot = '.' + file.name.split('.').pop().toLowerCase();
     
     if (!validExtensions.includes(fileExtensionWithDot)) {
-        alert('Formato de archivo no soportado. Por favor, selecciona un archivo .glb, .gltf, .obj o .stl');
+        alert('Formato de archivo no soportado. Por favor, selecciona un archivo .glb, .gltf, .obj, .stl o .ply');
         e.target.value = ''; // Limpiar el input
         return;
     }
@@ -577,6 +646,77 @@ if (realtimeSpeedInput && realtimeSpeedDisplay) {
         });
     }
 
+    // Selector de servicio de intersección activo
+    if (intersectionMethodSelect) {
+        const selectedMethod = config?.simulation?.intersectionMethod || 'edge';
+        intersectionMethodSelect.value = INTERSECTION_METHODS[selectedMethod] ? selectedMethod : 'edge';
+
+        const updateIntersectionMethodTooltip = () => {
+            const methodKey = intersectionMethodSelect.value;
+            const methodInfo = INTERSECTION_METHODS[methodKey];
+            if (methodInfo) {
+                intersectionMethodSelect.title = methodInfo.description;
+            }
+        };
+        updateIntersectionMethodTooltip();
+
+        intersectionMethodSelect.addEventListener('change', async (e) => {
+            const method = e.target.value;
+            if (!INTERSECTION_METHODS[method]) {
+                console.warn(`Metodo de interseccion no soportado: ${method}`);
+                return;
+            }
+
+            try {
+                const serviceClass = await loadIntersectionServiceByMethod(method);
+                if (viewModel) {
+                    viewModel.intersectionService = serviceClass;
+                }
+                if (visibilityPrefilterToggle) {
+                    applyVisibilityPrefilterSettingToService(serviceClass, visibilityPrefilterToggle.checked);
+                }
+
+                config.simulation = config.simulation || {};
+                config.simulation.intersectionMethod = method;
+                updateIntersectionMethodTooltip();
+
+                // Persistir la selección en simulator.yaml
+                await saveIntersectionMethodToYAML(method);
+                console.log(`Servicio de interseccion activo y guardado en YAML: ${method}`);
+            } catch (error) {
+                console.error('Error cambiando método de intersección:', error);
+                alert('No se pudo guardar el método de intersección en simulator.yaml');
+            }
+        });
+    }
+
+    // Toggle de prefiltro de visibilidad (aplica a Face/Edge)
+    if (visibilityPrefilterToggle) {
+        const initialPrefilterEnabled = config?.simulation?.visibilityPrefilterEnabled !== false;
+        visibilityPrefilterToggle.checked = initialPrefilterEnabled;
+        if (viewModel?.intersectionService) {
+            applyVisibilityPrefilterSettingToService(viewModel.intersectionService, initialPrefilterEnabled);
+        }
+
+        visibilityPrefilterToggle.addEventListener('change', async (e) => {
+            const enabled = e.target.checked;
+            if (viewModel?.intersectionService) {
+                applyVisibilityPrefilterSettingToService(viewModel.intersectionService, enabled);
+            }
+
+            config.simulation = config.simulation || {};
+            config.simulation.visibilityPrefilterEnabled = enabled;
+
+            try {
+                await saveVisibilityPrefilterToYAML(enabled);
+                console.log(`Prefiltro de visibilidad ${enabled ? 'activado' : 'desactivado'} y guardado en YAML`);
+            } catch (error) {
+                console.error('Error guardando prefiltro de visibilidad:', error);
+                alert('No se pudo guardar el prefiltro de visibilidad en simulator.yaml');
+            }
+        });
+    }
+
     // Controles de edición manual
     if (editModeToggle) {
         editModeToggle.addEventListener('change', (e) => {
@@ -608,6 +748,20 @@ if (realtimeSpeedInput && realtimeSpeedDisplay) {
 
     if (editTargetSelect) {
         editTargetSelect.addEventListener('change', (e) => {
+            const isObjectTarget = e.target.value === 'object';
+            if (transformScaleRadio) {
+                transformScaleRadio.disabled = !isObjectTarget;
+                if (!isObjectTarget && transformScaleRadio.checked) {
+                    const translateRadio = document.getElementById('transform-translate');
+                    if (translateRadio) {
+                        translateRadio.checked = true;
+                        if (view && view.transformControls) {
+                            view.transformControls.setMode('translate');
+                        }
+                    }
+                }
+            }
+
             if (view && view.selectEditTarget) {
                 view.selectEditTarget(e.target.value);
             }
@@ -676,7 +830,15 @@ if (realtimeSpeedInput && realtimeSpeedDisplay) {
             if (!currentConfig.object) {
                 currentConfig.object = {};
             }
-            currentConfig.object.initialPose = pose;
+            const normalizedScale = Array.isArray(pose.scale) && pose.scale.length === 3
+                ? pose.scale
+                : [1, 1, 1];
+
+            currentConfig.object.initialPose = {
+                position: pose.position,
+                rotation: pose.rotation,
+                scale: normalizedScale
+            };
         } else if (target.startsWith('sensor_')) {
             const sensorId = target.replace('sensor_', '');
             if (!currentConfig.sensors) {
@@ -684,7 +846,11 @@ if (realtimeSpeedInput && realtimeSpeedDisplay) {
             }
             const sensor = currentConfig.sensors.find(s => s.id === sensorId);
             if (sensor) {
-                sensor.pose = pose;
+                // Para sensores, persistimos pose (posición/rotación); el escalado se reserva al objeto.
+                sensor.pose = {
+                    position: pose.position,
+                    rotation: pose.rotation
+                };
             } else {
                 console.warn(`Sensor ${sensorId} no encontrado en la configuración`);
             }

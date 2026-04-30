@@ -63,7 +63,7 @@ app.get('/api/models', (req, res) => {
           const filePath = join(modelsDir, file)
           // Filtrar archivos que sean modelos válidos y no sean el modelo del sensor (gocator)
           return statSync(filePath).isFile() && 
-                 /\.(glb|gltf|obj|stl|fbx)$/i.test(file) &&
+                 /\.(glb|gltf|obj|stl|ply|fbx)$/i.test(file) &&
                  !/gocator/i.test(file)
         } catch {
           return false

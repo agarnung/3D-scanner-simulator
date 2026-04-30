@@ -438,7 +438,8 @@ body {
 
 .toggle-group {
     display: flex;
-    justify-content: center; 
+    justify-content: flex-start;
+    flex-wrap: wrap;
 }
 
 .toggle-group {
@@ -453,12 +454,14 @@ body {
 }
 
 .toggle-group label {
-    padding: 10px 20px;
+    padding: 8px 12px;
     background-color: #ddd;
     border-radius: 6px;
     cursor: pointer;
     user-select: none;
     transition: background-color 0.2s, color 0.2s;
+    min-width: 92px;
+    text-align: center;
 }
 
 .toggle-group input[type="radio"]:checked + label {

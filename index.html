@@ -22,7 +22,7 @@
             </div>
 
             <div class="control-group">
-                <input type="file" id="model-upload" accept=".glb,.gltf,.obj,.stl" style="display: none;">
+                <input type="file" id="model-upload" accept=".glb,.gltf,.obj,.stl,.ply" style="display: none;">
                 <button id="upload-model-btn" class="upload-button">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 8px; vertical-align: middle;">
                         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -97,6 +97,22 @@
                         Modo superficie visible
                     </label>
                 </div>
+                <div class="control-group">
+                    <label for="intersection-method-selector" title="Selecciona el algoritmo de interseccion activo">
+                        Servicio de interseccion
+                    </label>
+                    <select id="intersection-method-selector">
+                        <option value="edge" title="Interseccion plano-aristas. Rapido y aproximado.">Edge</option>
+                        <option value="face" title="Interseccion plano-caras. Mas denso y detallado.">Face</option>
+                        <option value="raycasting" title="Rayos por muestra. Mejor oclusion/superficie visible.">Raycasting</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="visibility-prefilter-toggle" title="Acelera face/edge descartando candidatos traseros antes del raycast de oclusion">
+                        <input type="checkbox" id="visibility-prefilter-toggle" checked>
+                        Prefiltro de visibilidad
+                    </label>
+                </div>
             </fieldset>
 
             <fieldset class="scan-params-group">
@@ -120,6 +136,8 @@
                         <label for="transform-translate">Traslación</label>
                         <input type="radio" id="transform-rotate" name="transform-mode" value="rotate">
                         <label for="transform-rotate">Rotación</label>
+                        <input type="radio" id="transform-scale" name="transform-mode" value="scale">
+                        <label for="transform-scale">Escala</label>
                     </div>
                 </div>
                 <div class="button-group" id="edit-buttons" style="display: none;">

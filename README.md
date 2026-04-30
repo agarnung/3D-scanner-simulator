@@ -8,6 +8,14 @@ Es un simulador de perfilómetros láser.
 
 Este proyecto ha sido generalizado para soportar configuraciones avanzadas de escaneo 3D:
 
+### ¿Qué aporta este simulador frente a conversión trivial de una malla 3D?
+
+- **Emulación del proceso de adquisición**: no solo genera puntos, simula cómo mediría un perfilómetro real.
+- **Visibilidad y oclusiones**: permite estudiar qué zonas se ven/no se ven desde cada sensor.
+- **Muestreo por perfiles**: reproduce adquisición discreta (perfiles, resolución y sincronía temporal).
+- **Configuración de celda de escaneo**: sensores, poses, ROI y movimientos de objeto/sensores.
+- **Exportación orientada a inspección**: genera perfiles y reconstrucciones comparables a flujos industriales.
+
 ### Características Principales
 
 - **Múltiples Sensores**: Soporta cualquier número de sensores configurados simultáneamente
@@ -233,7 +241,7 @@ Explicación de la implementación MVVM (adaptada).
 ### Services (Lógica de Negocio)
 
 - **IntersectionService.js**: Calcula la intersección entre el láser y el objeto
-- **ModelLoader.js**: Carga diferentes formatos de modelos 3D (OBJ, STL, GLB)
+- **ModelLoader.js**: Carga diferentes formatos de modelos 3D (OBJ, STL, GLB/GLTF, PLY)
 
 ### Flujo de trabajo
 
@@ -281,6 +289,16 @@ El modo superficie visible utiliza un filtrado eficiente por distancia para gara
 Esta técnica es computacionalmente muy eficiente y asegura que el sensor solo detecte la superficie más externa y visible, sin atravesar el objeto ni detectar puntos ocluidos.
 
 > **Nota**: Aunque el filtrado por distancia elimina la mayoría de puntos no visibles, pueden quedar algunos residuos de puntos que se cuelan como ruido impulsional, especialmente en geometrías complejas o con concavidades profundas. Esto es normal y similar al comportamiento de sensores láser reales.
+
+#### Selector de servicio de intersección
+
+La interfaz incluye un selector para cambiar el algoritmo activo en tiempo real:
+
+- **Edge**: intersección plano-aristas, rápido y aproximado.
+- **Face**: intersección plano-caras con muestreo, más denso/detallado.
+- **Raycasting**: lanza rayos por muestra del perfil y toma la primera/última intersección según modo (visible/rayos X).
+
+Cada opción muestra una breve explicación mediante `hover` (`title`) en el selector.
 
 Detalle sobre la diferencia entre los distintos servicios de intersección (edge [usando solo las aristas de cada triángulo] vs. face [usando toda la superficie de cada triángulo]):
 
@@ -333,6 +351,8 @@ docker run -d --name 3d-scanner-simulator-container -p 8123:8123 3d-scanner-simu
 ```
 
 La imagen desde la cual se crea el contenedor es `3d-scanner-simulator-image`. El contenedor ejecutado se llamará `3d-scanner-simulator-container`. El puerto 8123 del contenedor se mapea al puerto 8123 del host (`host:contenedor`). El servicio del contenedor estará disponible en este puerto.
+
+> **Nota**: También puedes lanzar el comando `start.sh`, que hace todo esto.
 
 > **Nota**: Para detener y eliminar el contenedor:
 

@@ -16,6 +16,10 @@ export default class FacePlaneIntersectionService {
     // Número de puntos a muestrear entre los extremos del segmento de intersección entre plano y triángulo (valor experimental sintético)
     // Es más por velocidad y por asegurar una precisión mínima, porque la resolución por perfil en sí se ajusta desde la config. del simulador
     static intersectionResolution = 10; 
+    // Optimización opcional: evita raycasts caros para candidatos que ya son
+    // claramente más "traseros" que un punto visible previamente aceptado en el mismo sector.
+    static enableVisibilityPrefilter = true;
+    static visibilityPrefilterDepthTolerance = 1e-6;
 
     static getTrapezoidPoints(sensor = null) {
         // Si se proporciona un sensor, usar su ROI; si no, usar valores por defecto
@@ -79,6 +83,7 @@ export default class FacePlaneIntersectionService {
         const xSlopeRight = (roi.x2 - roi.x3) / yRange;
 
         const profilePointsMap = new Map();
+        const visibilityRaycaster = (surfaceOnlyMode && sensor) ? new THREE.Raycaster() : null;
 
         for (let i = 0; index ? i < index.count : i < globalVertices.length; i += 3) {
             const [v1, v2, v3] = index ? [
@@ -146,19 +151,31 @@ export default class FacePlaneIntersectionService {
                 // Guardar el punto en coordenadas del mundo (no locales)
                 const ptWorld = pt.clone();
 
-                // En modo superficie visible, calcular distancia real al sensor para mantener solo el más cercano
+                // En modo superficie visible, mantener el punto con mayor profundidad local en Y
+                // (en este sistema local, valores de Y más altos corresponden a superficie más "frontal").
                 if (surfaceOnlyMode && sensor) {
-                    const sensorPosition = sensor.currentPose.position;
-                    const distanceToSensor = ptWorld.distanceTo(sensorPosition);
+                    // Prefiltro opcional (barato): si en este sector ya hay un punto visible aceptado
+                    // con mayor profundidad local, este candidato no puede ganarle y se descarta
+                    // sin lanzar raycast de oclusión.
+                    if (this.enableVisibilityPrefilter) {
+                        const existing = profilePointsMap.get(sectorKey);
+                        if (existing && (ptLocal.y <= (existing.depth - this.visibilityPrefilterDepthTolerance))) {
+                            continue;
+                        }
+                    }
+
+                    if (!this.isPointVisibleFromSensor(objectMesh, sensor, ptWorld, visibilityRaycaster)) {
+                        continue;
+                    }
+
+                    const localDepth = ptLocal.y;
                     
                     if (!profilePointsMap.has(sectorKey)) {
-                        profilePointsMap.set(sectorKey, { point: ptWorld, distance: distanceToSensor });
+                        profilePointsMap.set(sectorKey, { point: ptWorld, depth: localDepth });
                     } else {
                         const existing = profilePointsMap.get(sectorKey);
-                        // Mantener solo el punto más cercano al sensor en este sector
-                        // Esto elimina automáticamente puntos ocluidos porque están más lejos
-                        if (distanceToSensor < existing.distance) {
-                            profilePointsMap.set(sectorKey, { point: ptWorld, distance: distanceToSensor });
+                        if (localDepth > existing.depth) {
+                            profilePointsMap.set(sectorKey, { point: ptWorld, depth: localDepth });
                         }
                     }
                 } else {
@@ -183,6 +200,32 @@ export default class FacePlaneIntersectionService {
         console.log(`Perfil calculado con ${profilePoints.length} puntos (primeras intersecciones visibles)`);
         
         return profilePoints;
+    }
+
+    /**
+     * Comprueba oclusión real: el punto es visible si el primer impacto del rayo
+     * lanzado desde el sensor coincide con ese punto (dentro de tolerancia).
+     */
+    static isPointVisibleFromSensor(objectMesh, sensor, pointWorld, raycaster = null) {
+        if (!objectMesh || !sensor?.currentPose) return false;
+
+        const origin = sensor.currentPose.position.clone();
+        const toPoint = pointWorld.clone().sub(origin);
+        const distanceToPoint = toPoint.length();
+        if (distanceToPoint < 1e-8) return true;
+
+        const direction = toPoint.normalize();
+        const rc = raycaster || new THREE.Raycaster();
+        rc.near = 0;
+        // Criterio robusto:
+        // si existe cualquier colisión ANTES del punto candidato, entonces está ocluido.
+        // Se usa un pequeño margen para no penalizar errores numéricos.
+        const tolerance = Math.max(1e-4, distanceToPoint * 1e-3);
+        rc.far = Math.max(0, distanceToPoint - tolerance);
+        rc.set(origin, direction);
+
+        const hits = rc.intersectObject(objectMesh, true);
+        return !hits || hits.length === 0;
     }
     
     static getLocalVertices(geometry) {
@@ -279,15 +322,13 @@ export default class FacePlaneIntersectionService {
         
         // Trasladar al origen del sensor
         pointLocal.sub(sensor.currentPose.position);
-        
-        // Aplicar rotación inversa
-        const inverseRotation = new THREE.Euler(
-            -sensor.currentPose.rotation.x,
-            -sensor.currentPose.rotation.y,
-            -sensor.currentPose.rotation.z,
-            'ZYX'
-        );
-        pointLocal.applyEuler(inverseRotation);
+
+        // Aplicar rotación inversa de forma robusta con cuaterniones
+        // (evita inconsistencias por orden Euler).
+        const inverseQuat = new THREE.Quaternion()
+            .setFromEuler(sensor.currentPose.rotation)
+            .invert();
+        pointLocal.applyQuaternion(inverseQuat);
         
         return pointLocal;
     }

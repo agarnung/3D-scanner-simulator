@@ -22,12 +22,18 @@ export default class ResetScanCommand {
         if (this.viewModel.object && this.viewModel.object.mesh && this.viewModel.objectOriginalInitialPose) {
             this.viewModel.object.mesh.position.copy(this.viewModel.objectOriginalInitialPose.position);
             this.viewModel.object.mesh.rotation.copy(this.viewModel.objectOriginalInitialPose.rotation);
+            if (this.viewModel.objectOriginalInitialPose.scale) {
+                this.viewModel.object.mesh.scale.copy(this.viewModel.objectOriginalInitialPose.scale);
+            }
             this.viewModel.object.mesh.updateMatrixWorld();
             
             // Restaurar también objectInitialPose a la original
             this.viewModel.objectInitialPose = {
                 position: this.viewModel.objectOriginalInitialPose.position.clone(),
-                rotation: this.viewModel.objectOriginalInitialPose.rotation.clone()
+                rotation: this.viewModel.objectOriginalInitialPose.rotation.clone(),
+                scale: this.viewModel.objectOriginalInitialPose.scale
+                    ? this.viewModel.objectOriginalInitialPose.scale.clone()
+                    : this.viewModel.object.mesh.scale.clone()
             };
         }
         

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 
-import ModelLoader from '../services/ModelLoader.js';
+import ModelLoader, { buildBVH, disposeBVH } from '../services/ModelLoader.js';
 import Sensor from '../model/Sensor.js';
 import TransformationService from '../services/TransformationService.js';
 
@@ -172,6 +172,9 @@ export default class SimulationViewModel {
           }
         };
         
+        // Construir BVH para acelerar todos los raycasts de oclusión posteriores.
+        buildBVH(model);
+
         if (this.view) this.view.scene.add(model);
         console.log('Objeto cargado:', url);
 
@@ -193,6 +196,9 @@ export default class SimulationViewModel {
       if (this.view) {
         this.view.scene.remove(this.object.mesh);
       }
+
+      // Liberar BVH antes de liberar geometría.
+      disposeBVH(this.object.mesh);
 
       // Liberar recursos de geometría y material
       this.object.mesh.traverse((child) => {

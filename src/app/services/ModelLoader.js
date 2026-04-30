@@ -4,6 +4,39 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { STLLoader } from 'three/addons/loaders/STLLoader.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 import { PLYLoader } from 'three/addons/loaders/PLYLoader.js';
+import { MeshBVH, acceleratedRaycast } from 'three-mesh-bvh';
+
+// Parchar el raycast de Three.js con la versión acelerada por BVH.
+// Esto hace que todos los Raycaster.intersectObject() posteriores sean O(log n) en vez de O(n).
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
+
+/**
+ * Construye el BVH sobre la geometría de una malla y todos sus hijos.
+ * Debe llamarse una vez después de cargar el objeto para que los raycasts
+ * de oclusión (isPointVisibleFromSensor) sean rápidos.
+ */
+export function buildBVH(object) {
+    if (!object) return;
+    object.traverse(child => {
+        if (child.isMesh && child.geometry) {
+            if (!child.geometry.boundsTree) {
+                child.geometry.boundsTree = new MeshBVH(child.geometry);
+            }
+        }
+    });
+}
+
+/**
+ * Libera el BVH de una malla para no acumular memoria al recargar.
+ */
+export function disposeBVH(object) {
+    if (!object) return;
+    object.traverse(child => {
+        if (child.isMesh && child.geometry?.boundsTree) {
+            child.geometry.boundsTree = undefined;
+        }
+    });
+}
 
 export default class ModelLoader {
   constructor() {

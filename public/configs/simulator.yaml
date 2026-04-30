@@ -96,6 +96,7 @@ object:
       startProfile: 0
 simulation:
   intersectionMethod: face
+  rendererBackend: auto
   defaultRotationDeg: 360
   defaultProfiles: 4096
   offsetZ: 0.001

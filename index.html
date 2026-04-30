@@ -113,6 +113,19 @@
                         Prefiltro de visibilidad
                     </label>
                 </div>
+                <div class="control-group">
+                    <label for="renderer-backend-selector" title="Selecciona el backend de render: WebGPU (si disponible) o WebGL">
+                        Backend de render
+                    </label>
+                    <select id="renderer-backend-selector">
+                        <option value="auto">Auto (preferir WebGPU)</option>
+                        <option value="webgl">WebGL</option>
+                        <option value="webgpu">WebGPU</option>
+                    </select>
+                    <div id="renderer-backend-active" class="renderer-backend-badge" title="Backend de render realmente activo en esta sesión">
+                        Backend activo: detectando...
+                    </div>
+                </div>
             </fieldset>
 
             <fieldset class="scan-params-group">

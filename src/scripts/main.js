@@ -109,6 +109,24 @@ async function saveVisibilityPrefilterToYAML(enabled) {
     }
 }
 
+async function saveRendererBackendToYAML(backend) {
+    const currentConfig = await loadConfig();
+    currentConfig.simulation = currentConfig.simulation || {};
+    currentConfig.simulation.rendererBackend = backend;
+
+    const response = await fetch('/api/save-config', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(currentConfig)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Error al guardar backend de render: ${response.statusText}`);
+    }
+}
+
 function applyVisibilityPrefilterSettingToService(serviceClass, enabled) {
     if (!serviceClass) return;
     if (Object.prototype.hasOwnProperty.call(serviceClass, 'enableVisibilityPrefilter')) {
@@ -202,6 +220,7 @@ async function initializeApp() {
   config.simulation.intersectionMethod = selectedMethod;
 
   const appContainer = document.getElementById('app');
+  const requestedRendererBackend = config.simulation?.rendererBackend || 'auto';
   const viewModel = new SimulationViewModel({
       pointsPerProfile: config.sensors?.[0]?.pointsPerProfile || 1024,
       onShowLoadingPopup: showLoadingPopup,
@@ -209,7 +228,9 @@ async function initializeApp() {
       config: config,
       intersectionService: IntersectionService
   });
-  const view = new ThreeView(appContainer, viewModel);
+  const view = await ThreeView.create(appContainer, viewModel, {
+      rendererBackend: requestedRendererBackend
+  });
   viewModel.setView(view);
   
   return { config, viewModel, view };
@@ -399,14 +420,56 @@ function setupEventListeners() {
     const transformModeRadios = document.querySelectorAll('input[name="transform-mode"]');
     const transformScaleRadio = document.getElementById('transform-scale');
     const surfaceOnlyModeCheckbox = document.getElementById('surface-only-mode');
+    const rendererBackendSelect = document.getElementById('renderer-backend-selector');
+    const rendererBackendActiveBadge = document.getElementById('renderer-backend-active');
     const visibilityPrefilterToggle = document.getElementById('visibility-prefilter-toggle');
     const intersectionMethodSelect = document.getElementById('intersection-method-selector');
+
+    const updateRendererBackendBadge = (activeBackend, pending = false) => {
+        if (!rendererBackendActiveBadge) return;
+        const normalized = activeBackend === 'webgpu' ? 'WebGPU' : 'WebGL';
+        rendererBackendActiveBadge.textContent = pending
+            ? `Backend activo: ${normalized} (cambio pendiente de recarga)`
+            : `Backend activo: ${normalized}`;
+    };
+
+    if (view?.rendererBackend) {
+        updateRendererBackendBadge(view.rendererBackend);
+    }
 
     // Cargar valores por defecto desde la configuración
     if (config.simulation && viewModel) {
         viewModel.totalProfiles = config.simulation.defaultProfiles || 4096;
         viewModel.offsetZ = config.simulation.offsetZ || 0.001;
     }
+
+    const loadModelByName = async (modelName) => {
+        if (!modelName) return;
+
+        // Agregar timestamp para evitar caché
+        const timestamp = new Date().getTime();
+        const modelPath = `/models/${modelName}?t=${timestamp}`;
+
+        // Extraer el nombre base del archivo (sin extensión) y actualizar el campo de nombre del escaneo
+        const baseName = modelName.replace(/\.[^/.]+$/, '');
+        if (scanNameInput && baseName) {
+            scanNameInput.value = baseName;
+        }
+
+        let loadingShown = false;
+        const loadingTimeout = setTimeout(() => {
+            showLoadingPopup();
+            loadingShown = true;
+        }, 100);
+
+        try {
+            viewModel.removeCurrentObject();
+            await viewModel.loadObject(modelPath);
+        } finally {
+            clearTimeout(loadingTimeout);
+            if (loadingShown) hideLoadingPopup();
+        }
+    };
 
     // Controles de la interfaz
     startButton.addEventListener('click', async () => {
@@ -485,34 +548,11 @@ saveScanButton.addEventListener('click', async () => {
 modelSelector.addEventListener('change', async (e) => {
     const modelName = e.target.value;
     if (!modelName) return;
-
-    // Agregar timestamp para evitar caché
-    const timestamp = new Date().getTime();
-    const modelPath = `/models/${modelName}?t=${timestamp}`;
-
-    // Extraer el nombre base del archivo (sin extensión) y actualizar el campo de nombre del escaneo
-    const baseName = modelName.replace(/\.[^/.]+$/, ''); // Eliminar extensión
-    if (scanNameInput && baseName) {
-        scanNameInput.value = baseName;
-    }
-
-    let loadingShown = false;
-
-    // Mostrar el popup solo si la carga tarda más de 100ms
-    const loadingTimeout = setTimeout(() => {
-        showLoadingPopup();
-        loadingShown = true;
-    }, 100);
-
     try {
-        viewModel.removeCurrentObject();
-        await viewModel.loadObject(modelPath);
+        await loadModelByName(modelName);
     } catch (err) {
         console.error('Error cargando modelo:', err);
         alert('Hubo un error al cargar el modelo.');
-    } finally {
-        clearTimeout(loadingTimeout); // Cancelar el timeout si ya se cargó
-        if (loadingShown) hideLoadingPopup();
     }
 });
 
@@ -717,6 +757,33 @@ if (realtimeSpeedInput && realtimeSpeedDisplay) {
         });
     }
 
+    // Selector de backend de render (requiere recarga para re-crear renderer)
+    if (rendererBackendSelect) {
+        const currentBackend = config?.simulation?.rendererBackend || 'auto';
+        rendererBackendSelect.value = ['auto', 'webgl', 'webgpu'].includes(currentBackend)
+            ? currentBackend
+            : 'auto';
+
+        rendererBackendSelect.addEventListener('change', async (e) => {
+            const backend = e.target.value;
+            if (!['auto', 'webgl', 'webgpu'].includes(backend)) return;
+
+            config.simulation = config.simulation || {};
+            config.simulation.rendererBackend = backend;
+
+            try {
+                await saveRendererBackendToYAML(backend);
+                if (view?.rendererBackend) {
+                    updateRendererBackendBadge(view.rendererBackend, true);
+                }
+                alert('Backend de render guardado. Recarga la página para aplicarlo.');
+            } catch (error) {
+                console.error('Error guardando backend de render:', error);
+                alert('No se pudo guardar el backend de render en simulator.yaml');
+            }
+        });
+    }
+
     // Controles de edición manual
     if (editModeToggle) {
         editModeToggle.addEventListener('change', (e) => {
@@ -784,11 +851,24 @@ if (realtimeSpeedInput && realtimeSpeedDisplay) {
             try {
                 saveInitialPoseBtn.disabled = true;
                 saveInitialPoseBtn.textContent = 'Guardando...';
+                const selectedModelNameBeforeReload = modelSelector ? modelSelector.value : '';
                 
                 await saveInitialPoseToYAML(view.currentEditTarget, pose);
                 
                 // Recargar configuración automáticamente para aplicar los cambios
                 await reloadConfiguration();
+
+                // Restaurar automáticamente el modelo que el usuario tenía seleccionado
+                // para no obligar a re-elegirlo tras guardar pose.
+                if (selectedModelNameBeforeReload) {
+                    const existsInSelector = Array.from(modelSelector.options).some(
+                        option => option.value === selectedModelNameBeforeReload
+                    );
+                    if (existsInSelector) {
+                        modelSelector.value = selectedModelNameBeforeReload;
+                        await loadModelByName(selectedModelNameBeforeReload);
+                    }
+                }
                 
                 alert('Pose inicial guardada y aplicada correctamente');
                 saveInitialPoseBtn.textContent = 'Guardar Pose Inicial';

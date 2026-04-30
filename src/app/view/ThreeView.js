@@ -9,14 +9,43 @@ import EdgePlaneIntersectionService from '../services/EdgePlaneIntersectionServi
 import FacePlaneIntersectionService from '../services/FacePlaneIntersectionService.js';
 
 export default class ThreeView {
-  constructor(container, viewModel) {
+  static async create(container, viewModel, { rendererBackend = 'auto' } = {}) {
+    const { renderer, backendUsed } = await ThreeView.createRenderer(rendererBackend);
+    return new ThreeView(container, viewModel, renderer, backendUsed);
+  }
+
+  static async createRenderer(rendererBackend = 'auto') {
+    const wantsWebGPU = rendererBackend === 'webgpu' || rendererBackend === 'auto';
+    if (wantsWebGPU && typeof navigator !== 'undefined' && navigator.gpu) {
+      try {
+        const webgpuModule = await import('three/webgpu');
+        const WebGPURenderer = webgpuModule.WebGPURenderer || webgpuModule.default;
+        if (!WebGPURenderer) {
+          throw new Error('WebGPURenderer no exportado por three/webgpu');
+        }
+        const webgpuRenderer = new WebGPURenderer({ antialias: true });
+        await webgpuRenderer.init();
+        console.log('Render backend activo: WebGPU');
+        return { renderer: webgpuRenderer, backendUsed: 'webgpu' };
+      } catch (error) {
+        console.warn('No se pudo inicializar WebGPU, fallback a WebGL:', error);
+      }
+    }
+
+    const webglRenderer = new THREE.WebGLRenderer({ antialias: true });
+    console.log('Render backend activo: WebGL');
+    return { renderer: webglRenderer, backendUsed: 'webgl' };
+  }
+
+  constructor(container, viewModel, renderer = null, backendUsed = 'webgl') {
     this.container = container;
     this.viewModel = viewModel;
+    this.rendererBackend = backendUsed;
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer = renderer || new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     
     // Prevenir arrastre de imagen del navegador en el canvas

@@ -194,6 +194,10 @@ export default class ConfigValidationService {
       errors.push('Simulación: \'visibilityPrefilterEnabled\' debe ser booleano');
     }
 
+    if (simulation.rendererBackend !== undefined && !['auto', 'webgl', 'webgpu'].includes(simulation.rendererBackend)) {
+      errors.push('Simulación: \'rendererBackend\' debe ser \'auto\', \'webgl\' o \'webgpu\'');
+    }
+
     return errors;
   }
 

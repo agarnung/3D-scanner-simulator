@@ -237,12 +237,13 @@ Script auxiliar post-proceso: `scripts/reunravell.py` (reajuste de incrementos Z
 
 ## Galería
 
-| Vista del simulador | Reconstrucción 3D |
+|  |  |
 |---------------------|-------------------|
 | ![3dsim1](./assets/3dsim1.png) | ![reconstructed](./assets/reconstructed3d.png) |
 | ![3dsim2](./assets/3dsim2.png) | ![3dsim3](./assets/3dsim3.png) |
 | ![3dsim4](./assets/3dsim4.png) | ![3dsim5](./assets/3dsim5.png) |
 | ![3dsim6](./assets/3dsim6.png) | |
+|  |  |
 
 ---
 

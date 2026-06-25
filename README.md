@@ -1,43 +1,139 @@
-# 3d-scanner-simulator
+# 3D Scanner Simulator
 
-A 3D scanning simulator focused on scanning industrial parts with laser profilometers.
+Simulador web de **perfilómetros láser** para modelos 3D (digitalización, modelos 3D, piezas industriales...). Emula el proceso real de adquisición 3D: plano láser, ROI, perfiles discretos, oclusiones, movimientos de objeto/sensor y reconstrucción con transformaciones inversas.
 
-Es un simulador de perfilómetros láser.
+![app](./assets/app.png)
 
-## 🚀 Generalización del Simulador (Fork)
+Stack: **Three.js** (WebGL/WebGPU), **Vite**, **Express**, **YAML** declarativo.
 
-Este proyecto ha sido generalizado para soportar configuraciones avanzadas de escaneo 3D:
+---
 
-### ¿Qué aporta este simulador frente a conversión trivial de una malla 3D?
+## Tabla de contenidos
 
-- **Emulación del proceso de adquisición**: no solo genera puntos, simula cómo mediría un perfilómetro real.
-- **Visibilidad y oclusiones**: permite estudiar qué zonas se ven/no se ven desde cada sensor.
-- **Muestreo por perfiles**: reproduce adquisición discreta (perfiles, resolución y sincronía temporal).
-- **Configuración de celda de escaneo**: sensores, poses, ROI y movimientos de objeto/sensores.
-- **Exportación orientada a inspección**: genera perfiles y reconstrucciones comparables a flujos industriales.
+- [Por qué no basta con convertir una malla](#por-qué-no-basta-con-convertir-una-malla)
+- [Inicio rápido](#inicio-rápido)
+- [Cómo funciona la simulación](#cómo-funciona-la-simulación)
+- [Arquitectura](#arquitectura)
+- [Configuración YAML](#configuración-yaml)
+- [Intersección y visibilidad](#intersección-y-visibilidad)
+- [Interfaz y flujo de trabajo](#interfaz-y-flujo-de-trabajo)
+- [Exportación y reconstrucción 3D](#exportación-y-reconstrucción-3d)
+- [Galería](#galería)
+- [Docker](#docker)
+- [Desarrollo local](#desarrollo-local)
+- [Servir desde Windows / WSL](#servir-desde-windows--wsl)
+- [Documentación adicional](#documentación-adicional)
 
-### Características Principales
+---
 
-- **Múltiples Sensores**: Soporta cualquier número de sensores configurados simultáneamente
-- **Poses Configurables**: Cada sensor puede tener su propia posición y orientación inicial
-- **ROI Personalizado**: Cada sensor puede tener su propia región de interés (ROI) configurable
-- **Movimientos Complejos**: 
-  - Rotaciones y traslaciones en cualquier eje (X, Y, Z)
-  - Movimientos simultáneos o secuenciales
-  - Aplicables tanto a objetos como a sensores
-- **Transformaciones Inversas**: Sistema de reconstrucción que aplica transformaciones inversas para obtener la posición real de los puntos escaneados
-- **Mallas Sin Modificar**: Las mallas se colocan en escena tal como son, sin modificaciones
+## Por qué no basta con convertir una malla
 
-### Plan de Implementación
+| Aspecto | Conversión trivial de malla | Este simulador |
+|--------|-----------------------------|----------------|
+| Adquisición | Puntos directos de la geometría | Emulación del perfilómetro (perfil a perfil) |
+| Oclusión | No modelada | Superficie visible vs. geometría completa |
+| Celda de escaneo | No configurable | Sensores, poses, ROI, movimientos |
+| Salida | Nube genérica | Perfiles y reconstrucción orientados a inspección industrial |
 
-#### 1. Configuración YAML (`public/configs/simulator.yaml`)
+**Capacidades principales:**
 
-La configuración ahora soporta:
-- **Múltiples sensores** con poses y ROI individuales
-- **Movimientos de objetos** (rotaciones/traslaciones en cualquier eje)
-- **Movimientos de sensores** (rotaciones/traslaciones en cualquier eje)
+- Múltiples sensores con pose, ROI y movimientos propios
+- Movimientos de objeto y sensor: rotación/traslación en X, Y, Z; simultáneos o secuenciales
+- Transformaciones inversas para reconstrucción 3D en espacio real
+- Mallas sin modificar: se colocan en escena tal cual
+- Validación automática de configuración YAML
+- Exportación combinada y por sensor (CSV, TXT, RAW, ZIP con reconstrucción)
 
-Ejemplo de configuración:
+---
+
+## Inicio rápido
+
+```bash
+./init.sh
+```
+
+Abre **http://localhost:8123**.
+
+`init.sh` construye la imagen, libera el puerto 8123 si hace falta, arranca el contenedor y monta volúmenes para `public/configs` (lectura/escritura) y `public/models` (solo lectura), de modo que cambios en YAML y modelos se reflejan sin reconstruir la imagen.
+
+Configuración de ejemplo:
+
+```bash
+cp public/configs/simulator.example.yaml public/configs/simulator.yaml
+```
+
+---
+
+## Cómo funciona la simulación
+
+### Flujo de escaneo
+
+1. Se cargan sensores y objeto desde `simulator.yaml`.
+2. Para cada perfil `i`:
+   - Se calcula la pose del objeto según sus movimientos.
+   - Para cada sensor:
+     - Se calcula la pose del sensor según sus movimientos.
+     - Se intersecta el plano láser (ROI trapezoidal) con la malla.
+     - Se almacenan los puntos del perfil (por sensor).
+3. Al finalizar, se restauran las poses iniciales.
+
+### Reconstrucción 3D
+
+Para cada perfil capturado se conoce la pose del objeto en ese instante. La exportación aplica la **transformación inversa** a cada punto y obtiene su posición en el espacio 3D real.
+
+Detalle matemático completo: [assets/RECONSTRUCCION_3D.md](./assets/RECONSTRUCCION_3D.md).
+
+### Modos de detección
+
+- **Superficie visible** (por defecto): filtra por distancia al sensor en cada sector del perfil; solo queda el punto más cercano (oclusión y caras internas descartadas de forma eficiente).
+- **Rayos X**: todas las intersecciones con la geometría, útil para depuración.
+
+> En geometrías muy cóncavas pueden quedar residuos puntuales, análogo al ruido impulsional de sensores reales.
+
+---
+
+## Arquitectura
+
+Patrón **MVVM** con separación clara de responsabilidades.
+
+```
+UI (index.html)
+  → SimulationViewModel
+      → Model: Sensor, PointCloud
+      → Services: intersección, transformaciones, carga, exportación, validación
+  → ThreeView (solo render 3D)
+```
+
+| Capa | Módulos |
+|------|---------|
+| **Model** | `Sensor.js`, `PointCloud.js` |
+| **ViewModel** | `SimulationViewModel.js`, commands (`Start` / `Stop` / `Reset`) |
+| **View** | `ThreeView.js` |
+| **Services** | `EdgePlaneIntersectionService`, `FacePlaneIntersectionService`, `RaycastingIntersectionService`, `TransformationService`, `ScanExportService`, `ModelLoader`, `ConfigValidationService`, `ProfileRenderer2D` |
+
+**Flujo:** controles UI → comandos ViewModel → modelos/servicios → notificación a `ThreeView` → actualización de escena y canvas 2D de perfiles.
+
+Las mallas cargan un **BVH** (`three-mesh-bvh`) para acelerar raycasts de oclusión.
+
+---
+
+## Configuración YAML
+
+Archivo activo: `public/configs/simulator.yaml`.  
+Referencia comentada: `public/configs/simulator.example.yaml`.
+
+### Estructura
+
+| Sección | Contenido |
+|---------|-----------|
+| `scene`, `camera`, `lights` | Escena Three.js |
+| `models.object` | Ruta del objeto a escanear |
+| `sensors[]` | `id`, `model`, `pointsPerProfile`, `pose`, `roi`, `movements` |
+| `object` | `initialPose`, `movements` |
+| `simulation` | `intersectionMethod`, `defaultProfiles`, `offsetZ`, `rendererBackend`, etc. |
+
+### Ejemplo mínimo
+
 ```yaml
 sensors:
   - id: 'sensor_1'
@@ -72,428 +168,224 @@ object:
       startProfile: 0
 ```
 
-#### 2. Arquitectura Generalizada
+### Validación
 
-- **Sensor.js**: Clase generalizada que soporta pose, ROI y movimientos
-- **TransformationService.js**: Servicio para calcular transformaciones y sus inversas
-- **Servicios de Intersección**: Actualizados para trabajar con poses de sensores
-- **SimulationViewModel**: Maneja múltiples sensores y aplica transformaciones
+`ConfigValidationService` comprueba campos obligatorios, tipos, ROI trapezoidal válido y parámetros de movimientos. Errores y advertencias en consola del navegador.
 
-#### 3. Flujo de Escaneo
+---
 
-1. Se cargan los sensores y el objeto desde la configuración
-2. Para cada perfil:
-   - Se calcula la pose del objeto basada en sus movimientos
-   - Se aplica la pose al objeto
-   - Para cada sensor:
-     - Se calcula la pose del sensor basada en sus movimientos
-     - Se aplica la pose al sensor
-     - Se realiza el escaneo con el plano láser del sensor
-     - Se almacenan los perfiles por sensor
-3. Al finalizar, se restauran las poses iniciales
+## Intersección y visibilidad
 
-#### 4. Reconstrucción 3D
+Selector en la GUI (persistido en YAML como `simulation.intersectionMethod`):
 
-El sistema de exportación aplica transformaciones inversas:
-- Para cada perfil, se calcula la pose que tenía el objeto cuando se capturó
-- Se aplica la transformación inversa a cada punto
-- Se obtiene la posición real del punto en el espacio 3D
+| Método | Descripción |
+|--------|-------------|
+| **Edge** | Plano-aristas. Rápido, aproximado. |
+| **Face** | Plano-caras con muestreo denso. Más detalle. |
+| **Raycasting** | Rayo por muestra del perfil. Mejor para oclusión/superficie visible. |
 
-Consúltese el documento [RECONSTRUCCIÓN_3D](./assets/RECONSTRUCCION_3D.md) para una explicación detallada del proceso de escaneado y reconstrucción seguido.
+**Prefiltro de visibilidad** (`visibilityPrefilterEnabled`): en Edge/Face descarta candidatos traseros antes del raycast de oclusión.
 
-#### 5. Configuración de Ejemplo
+**Backend de render:** Auto (preferir WebGPU), WebGL o WebGPU. Si WebGPU no está disponible, fallback automático a WebGL.
 
-Se ha creado un archivo de configuración de ejemplo completo en `public/configs/simulator.example.yaml` que muestra:
-- Configuración de múltiples sensores con diferentes poses y ROI
-- Ejemplos de movimientos complejos (rotaciones y traslaciones)
-- Movimientos simultáneos y secuenciales
-- Comentarios detallados explicando cada opción
+![Edge vs Face](./assets/edge_vs_face_intersection.png)
 
-Para usar el ejemplo, copia el archivo:
-```bash
-cp public/configs/simulator.example.yaml public/configs/simulator.yaml
-```
+---
 
-Luego edita `simulator.yaml` según tus necesidades.
+## Interfaz y flujo de trabajo
 
-#### 6. Validación de Configuración
+### Escaneo
 
-El sistema ahora incluye validación automática de configuraciones:
-- Valida que todos los campos requeridos estén presentes
-- Verifica tipos de datos y rangos válidos
-- Comprueba que los ROI formen trapecios válidos
-- Valida movimientos y sus parámetros
-- Muestra errores y advertencias en la consola
+1. Elegir o cargar modelo (GLB, GLTF, OBJ, STL, PLY).
+2. Ajustar parámetros en YAML o con **Recargar Configuración**.
+3. Iniciar / detener / reiniciar escaneo.
+4. Ver perfiles 1D por sensor (navegación ◀ ▶).
+5. **Guardar Escaneo** → ZIP con exportaciones.
 
-#### 7. Exportación Mejorada
+### Visualización de movimiento (sin escanear)
 
-El sistema de exportación ahora:
-- Exporta perfiles combinados de todos los sensores
-- Exporta perfiles individuales por sensor (cuando hay múltiples sensores)
-- Incluye metadatos en los archivos CSV (ID del sensor, número de perfiles, etc.)
-- Aplica transformaciones inversas correctamente para la reconstrucción 3D
+- Velocidad 0.1x–5x, loop continuo.
+- ROI y sensores se actualizan con el movimiento.
 
-#### 8. Visualización en Tiempo Real
+### Edición manual de poses
 
-El simulador ahora incluye un modo de visualización en tiempo real que muestra los movimientos configurados sin realizar el escaneo completo:
+- Modo edición con gizmos (traslación / rotación / escala).
+- Selector objeto o sensor.
+- **Guardar Pose Inicial** → escribe en `simulator.yaml` (solo pose inicial, no movimientos).
 
-- **Iniciar/Detener Visualización**: Botones en la interfaz para controlar la visualización
-- **Control de Velocidad**: Slider para ajustar la velocidad de reproducción (0.1x a 5x)
-- **Movimientos Suaves**: Los objetos y sensores se mueven suavemente según sus configuraciones
-- **ROI Dinámico**: Las visualizaciones de ROI se actualizan cuando los sensores se mueven
-- **Loop Continuo**: La visualización se repite automáticamente al llegar al final
+### Visualización 3D
 
-**Uso:**
-1. Carga el objeto y los sensores
-2. Configura los movimientos en el archivo YAML
-3. Haz clic en "Iniciar Visualización" para ver los movimientos en tiempo real
-4. Ajusta la velocidad con el slider si es necesario
-5. Haz clic en "Detener Visualización" para detener y restaurar las poses iniciales
+- Wireframe o mesh (solo afecta al render, no a la intersección).
 
-#### 9. Edición Manual de Poses
+---
 
-El simulador incluye un modo de edición manual que permite ajustar visualmente las poses iniciales de objetos y sensores:
+## Exportación y reconstrucción 3D
 
-- **Modo Edición**: Activa/desactiva los controles de transformación tipo Blender (ejes rojo, verde, azul)
-- **Selección de Objetos**: Permite elegir entre el objeto principal o cualquier sensor configurado
-- **Controles Visuales**: Mueve y rota objetos usando los controles interactivos en la escena 3D
-- **Guardar Pose Inicial**: Guarda automáticamente las nuevas poses en el archivo `simulator.yaml`
-- **Solo Pose Inicial**: Solo se actualiza la pose inicial, no los movimientos configurados
+`ScanExportService` genera un ZIP con:
 
-**Uso:**
-1. Activa el checkbox "Activar modo edición" en la interfaz
-2. Selecciona el objeto o sensor que deseas mover desde el selector
-3. Usa los controles visuales (flechas para traslación, anillos para rotación) para ajustar la posición
-4. Haz clic en "Guardar Pose Inicial" para guardar los cambios en el YAML
-5. Desactiva el modo edición para ocultar los controles
+| Archivo | Contenido |
+|---------|-----------|
+| `*_raw.txt` | Perfiles en binario float32 (X, Y, Z local) |
+| `*_data.csv` | Coordenadas desenrolladas con offset Z por perfil |
+| `*_xyz.txt` | Mismo contenido en texto |
+| `*_reconstructed.ply` | Nube 3D con transformaciones inversas |
+| `*_<sensorId>_*.csv/txt` | Perfiles individuales si hay varios sensores |
 
-#### 10. Características Implementadas
+Script auxiliar post-proceso: `scripts/reunravell.py` (reajuste de incrementos Z en TXT exportados).
 
-✅ Múltiples sensores con poses y ROI configurables  
-✅ Movimientos complejos (rotaciones y traslaciones en cualquier eje)  
-✅ Transformaciones inversas para reconstrucción 3D  
-✅ Validación de configuraciones  
-✅ Exportación por sensor  
-✅ Visualización de múltiples sensores y sus ROI  
-✅ Visualización en tiempo real de movimientos  
-✅ Edición manual de poses iniciales con controles visuales
+---
 
 ## Galería
 
-<table style="margin: 0 auto; border-collapse: collapse;">
-  <tr>
-    <td style="text-align: center; padding: 10px;">
-      <img src="./assets/3dsim1.png" width="800" height="600" alt="3dsim1" />
-    </td>
-  </tr>
-  <tr>
-    <td style="text-align: center; padding: 10px;">
-      <img src="./assets/3dsim2.png" width="800" height="600" alt="3dsim2" />
-    </td>
-  </tr>
-  <tr>
-    <td style="text-align: center; padding: 10px;">
-      <img src="./assets/3dsim3.png" width="800" height="600" alt="3dsim3" />
-    </td>
-  </tr>
-  <tr>
-    <td style="text-align: center; padding: 10px;">
-      <img src="./assets/3dsim4.png" width="800" height="600" alt="3dsim4" />
-    </td>
-  </tr>
-  <tr>
-    <td style="text-align: center; padding: 10px;">
-      <img src="./assets/3dsim5.png" width="800" height="600" alt="3dsim5" />
-    </td>
-  </tr>
-  <tr>
-    <td style="text-align: center; padding: 10px;">
-      <img src="./assets/3dsim6.png" width="800" height="600" alt="3dsim6" />
-    </td>
-  </tr>
-  <tr>
-    <td style="text-align: center; padding: 10px;">
-      <img src="./assets/reconstructed3d.png" width="800" height="600" alt="reconstructed3d" />
-    </td>
-  </tr>
-</table>
+| Vista del simulador | Reconstrucción 3D |
+|---------------------|-------------------|
+| ![3dsim1](./assets/3dsim1.png) | ![reconstructed](./assets/reconstructed3d.png) |
+| ![3dsim2](./assets/3dsim2.png) | ![3dsim3](./assets/3dsim3.png) |
+| ![3dsim4](./assets/3dsim4.png) | ![3dsim5](./assets/3dsim5.png) |
+| ![3dsim6](./assets/3dsim6.png) | |
 
-## Descripción
+---
 
-Explicación de la implementación MVVM (adaptada).
+## Docker
 
-### Model (Modelo de Datos)
+Imagen multi-stage (`Dockerfile`): **builder** (Vite `npm run build`) + **runner** (Node Alpine + `scripts/server.js` en puerto **8123**).
 
-- **Object3D.js**: Representa el objeto a escanear (rueda) con propiedades de posición, rotación y velocidad
-- **Sensor.js**: Representa el sensor láser con posición, orientación y frecuencia de escaneo
-- **PointCloud.js**: Almacena los puntos capturados durante el escaneo
-
-### ViewModel (Lógica de Presentación)
-
-- **SimulationViewModel.js**: Coordina la simulación, conecta modelos con servicios
-- **Commands**: Patrón Command para acciones (Iniciar/Detener/Reiniciar escaneo)
-
-### View (Presentación)
-
-- **ThreeView.js**: Encargada exclusivamente del renderizado 3D con Three.js
-  - No contiene lógica de negocio, solo actualiza la visualización basada en el ViewModel
-
-### Services (Lógica de Negocio)
-
-- **IntersectionService.js**: Calcula la intersección entre el láser y el objeto
-- **ModelLoader.js**: Carga diferentes formatos de modelos 3D (OBJ, STL, GLB/GLTF, PLY)
-
-### Flujo de trabajo
-
-1. El usuario interactúa con los controles UI
-2. Los controles ejecutan comandos en el ViewModel
-3. El ViewModel actualiza los modelos y servicios
-4. El ViewModel notifica a la View para actualizar la visualización
-5. ThreeView actualiza la escena 3D basada en el estado actual
-
-Esta implementación mantiene una clara separación de responsabilidades siguiendo el patrón MVVM:
-
-- El Modelo solo almacena datos
-- El ViewModel contiene la lógica de presentación y coordinación
-- La Vista solo se encarga de la representación visual
-- Los Servicios encapsulan lógica compleja reusable
-
-### Funcionamiento de la simulación
-
-La simulación básica funciona así:
-
-1. Se carga un modelo 3D (rueda) y un sensor
-2. Al iniciar el escaneo, la rueda comienza a rotar
-3. Según la frecuencia configurada, se calcula la intersección láser-objeto
-4. Los puntos de intersección se añaden a la nube de puntos
-5. La nube de puntos se visualiza en tiempo real
-
-El modo `wireframe` solo influye en la visualización; no cambia la geometría ni el comportamiento físico del objeto, es decir, la intersección de plano con las caras debería seguir funcionando igual que en modo `mesh`.
-
-#### Modo de Escaneo: Superficie Visible vs Rayos X
-
-El simulador incluye dos modos de detección de intersecciones:
-
-- **Modo Superficie Visible (por defecto)**: Solo detecta triángulos orientados hacia el sensor, simulando el comportamiento real de sensores láser de triangulación. Este modo filtra automáticamente las caras internas y la cara inferior de objetos, mostrando únicamente la superficie externa visible desde la perspectiva del sensor.
-
-- **Modo Rayos X**: Detecta todas las intersecciones con la geometría, incluyendo caras internas y la cara inferior. Útil para debugging o análisis completo de la geometría.
-
-El modo se puede cambiar mediante el checkbox "Modo superficie visible" en la interfaz de usuario.
-
-**Implementación del Modo Superficie Visible:**
-
-El modo superficie visible utiliza un filtrado eficiente por distancia para garantizar que solo se detecten puntos realmente visibles:
-
-**Filtrado por distancia**: En cada sector del perfil láser, mantiene solo el punto más cercano al sensor. Como los puntos ocluidos están necesariamente más lejos que los puntos visibles, este filtrado elimina automáticamente la oclusión y las caras internas sin necesidad de cálculos costosos de normales o raycasting.
-
-Esta técnica es computacionalmente muy eficiente y asegura que el sensor solo detecte la superficie más externa y visible, sin atravesar el objeto ni detectar puntos ocluidos.
-
-> **Nota**: Aunque el filtrado por distancia elimina la mayoría de puntos no visibles, pueden quedar algunos residuos de puntos que se cuelan como ruido impulsional, especialmente en geometrías complejas o con concavidades profundas. Esto es normal y similar al comportamiento de sensores láser reales.
-
-#### Selector de servicio de intersección
-
-La interfaz incluye un selector para cambiar el algoritmo activo en tiempo real:
-
-- **Edge**: intersección plano-aristas, rápido y aproximado.
-- **Face**: intersección plano-caras con muestreo, más denso/detallado.
-- **Raycasting**: lanza rayos por muestra del perfil y toma la primera/última intersección según modo (visible/rayos X).
-
-Cada opción muestra una breve explicación mediante `hover` (`title`) en el selector.
-
-Detalle sobre la diferencia entre los distintos servicios de intersección (edge [usando solo las aristas de cada triángulo] vs. face [usando toda la superficie de cada triángulo]):
-
-<table style="margin: 0 auto; border-collapse: collapse;">
-  <tr>
-    <td style="text-align: center; padding: 10px;">
-      <img src="./assets/edge_vs_face_intersection.png" width="800" height="600" alt="edge_vs_face_intersection" />
-    </td>
-  </tr>
-</table>
-
-## Uso del simulador
-
-### Inicio rápido con script
-
-Para facilitar el inicio del sistema, se ha creado un script `init.sh` que automatiza todo el proceso:
+### Recomendado
 
 ```bash
 ./init.sh
 ```
 
-> **Nota**: El script `init.sh` detecta y elimina automáticamente contenedores existentes que puedan estar usando el puerto 8123, evitando conflictos de puertos.
+### Manual
 
-## Docker
+```bash
+docker build -f Dockerfile -t 3d-scanner-simulator-image .
+docker run -d --name 3d-scanner-simulator-container -p 8123:8123 \
+  -v "$(pwd)/public/configs:/app/public/configs:rw" \
+  -v "$(pwd)/public/models:/app/public/models:ro" \
+  3d-scanner-simulator-image
+```
 
-Esta app web está contenedorizada con Docker, en el que se lanza. Usamos Docker clásico, sin necesidad de Docker Compose al tener solo una imagen (un servicio). El entorno de desarrollo, despliegue y sus dependencias se instalan dentro del contenedor.
+Detener y eliminar:
 
-> **Nota**: Primero [instalar Docker](https://docs.docker.com/engine/install/ubuntu/) y agregar nuestro usuario al grupo Docker (luego, reiniciar):
+```bash
+./stop.sh
+# o
+docker stop 3d-scanner-simulator-container && docker rm 3d-scanner-simulator-container
+```
+
+Alternativa rápida (sin volúmenes): `./start.sh`.
+
+**Requisitos Docker** ([instalación](https://docs.docker.com/engine/install/ubuntu/)):
 
 ```bash
 sudo groupadd docker && sudo usermod -aG docker $USER && sudo systemctl restart docker
 ```
 
-El despliegue de Docker se hace en dos pasos ([_multi-stage builds_](https://stackoverflow.com/questions/56645546/from-as-in-dockerfile-not-working-as-i-expect)): uno para construirlo (instalación de librerías, dependencias...) y otro para ejecutarlo (servir los archivos de producción de la app web).
+`.dockerignore` excluye artefactos innecesarios del contexto de build.
 
-Se crea un `.dockerignore` para evitar tener que copiar archivos innecesarios del proyecto.
+### API del servidor (`scripts/server.js`)
 
-### Construcción y ejecución
+| Endpoint | Función |
+|----------|---------|
+| `GET /healthcheck` | Estado del servicio |
+| `GET /configs/*` | YAML sin caché |
+| `GET /api/models` | Lista de modelos en `public/models` |
+| `POST /api/save-config` | Guardar `simulator.yaml` |
 
-Para construir nuestra imagen, desde `/opt/3d-scanner-simulator` (usando `--no-cache` si se quieren reconstruir todas las etapas):
+---
 
-```bash
-docker build -f Dockerfile -t 3d-scanner-simulator-image .
-```
+## Desarrollo local
 
-Y para iniciar el nuevo contenedor desde la imagen (lo cual levantará la app en http://localhost:8123):
+**Requisitos:** Node.js 18+, npm.
 
-```bash
-docker run -d --name 3d-scanner-simulator-container -p 8123:8123 3d-scanner-simulator-image
-```
-
-La imagen desde la cual se crea el contenedor es `3d-scanner-simulator-image`. El contenedor ejecutado se llamará `3d-scanner-simulator-container`. El puerto 8123 del contenedor se mapea al puerto 8123 del host (`host:contenedor`). El servicio del contenedor estará disponible en este puerto.
-
-> **Nota**: También puedes lanzar el comando `start.sh`, que hace todo esto.
-
-> **Nota**: Para detener y eliminar el contenedor:
-
-```bash
-docker stop 3d-scanner-simulator-container && docker rm 3d-scanner-simulator-container
-```
-
-## Desarrollo Local
-
-Para desarrollo local con hot reloading (recarga automática al cambiar archivos), se puede ejecutar el simulador directamente sin Docker:
-
-### Requisitos
-
-- Node.js (versión 18 o superior recomendada)
-- npm
-
-### Instalación y Ejecución
-
-1. **Instalar dependencias**:
 ```bash
 npm install
+npm run dev      # http://localhost:8123 (Vite, HMR)
+npm run build    # producción → dist/
+npm run preview  # previsualizar build
 ```
 
-2. **Iniciar servidor de desarrollo**:
-```bash
-npm run dev
-```
+- HMR en HTML, CSS y JS.
+- `public/configs/` y `public/models/` se leen del disco; cambios en YAML con **Recargar Configuración** o recarga de página.
+- En desarrollo, Vite expone los mismos endpoints de modelos y guardado de config que el servidor de producción.
 
-El simulador estará disponible en `http://localhost:5173` (o el puerto que Vite asigne automáticamente).
+---
 
-### Características del Modo Desarrollo
+## Servir desde Windows / WSL
 
-- **Hot Module Replacement (HMR)**: Los cambios en el código se reflejan automáticamente en el navegador sin necesidad de recargar manualmente
-- **Recarga automática**: Los cambios en archivos HTML, CSS y JavaScript se aplican instantáneamente
-- **Servidor de desarrollo rápido**: Vite proporciona un servidor de desarrollo optimizado con tiempos de compilación muy rápidos
+Alternativa histórica sin Docker: servir desde WSL y exponer el puerto en la LAN de Windows.
 
-### Notas
+### Redirección de puerto WSL → Windows
 
-- Los archivos de configuración (`public/configs/simulator.yaml`) y modelos (`public/models/`) se leen directamente desde el sistema de archivos local
-- Los cambios en la configuración YAML se reflejan al recargar la página o usar el botón "Recargar Configuración"
-- Para producción, usar `npm run build` y luego `npm run preview` o desplegar usando Docker
-
-Este script construye la imagen, inicia el contenedor y muestra la URL de acceso al sistema.
-
-## ¿Y si quisiéramos servir desde Windows?
-
-Otra opción habría sido no usar Docker y servir desde Windows. Concretamente, esto se hizo inicialmente; servir la app desde la WSL dentro de Windows, puenteando sus IPs y restringiendo el acceso solo a los equipos conectados al mismo dominio LAN. A continuación se dejan grabadas las instrucciones para hacer esto.
-
-### Redirección de puerto WSL a Windows
-
-> **Nota**: Como servimos la app desde la WSL, debemos redirigir el puerto de WSL a Windows, e.g. con netsh:  
-> (ver https://stackoverflow.com/questions/75299266/how-can-i-expose-my-vite-project-in-wsl2)
-
-**Desde CMD como administrador en Windows:**
+Desde **CMD como administrador** ([referencia](https://stackoverflow.com/questions/75299266/how-can-i-expose-my-vite-project-in-wsl2ubuntu)):
 
 ```cmd
 netsh interface portproxy add v4tov4 listenaddress=172.16.102.205 listenport=8123 connectaddress=172.20.209.226 connectport=8123
-```
-
-**Para verificar las reglas de redirección:**
-
-```cmd
 netsh interface portproxy show all
-```
-
-**Para quitar la regla de redirección:**
-
-```cmd
 netsh interface portproxy delete v4tov4 listenaddress=172.16.102.205 listenport=8123
 ```
 
-**Para ver qué tipo de red estamos usando (Private, Public o DomainAuthenticated):**
+Tipo de red actual:
 
 ```powershell
 Get-NetConnectionProfile
 ```
 
-### Configuración del Firewall de Windows
+### Firewall de Windows
 
-> **Nota**: Abrir puerto 8123 solo para la red local en Windows Firewall
-
-**Crear regla para permitir conexiones TCP entrantes en puerto 8123 solo desde la red de dominio (i.e. el tipo de red de CTIC):**
+Permitir puerto 8123 solo en red de dominio:
 
 ```powershell
 New-NetFirewallRule -DisplayName "Vite 8123 Domain" -Direction Inbound -LocalPort 8123 -Protocol TCP -Action Allow -Profile Domain
-```
-
-**Opcionalmente rechazar conexiones de fuera de la red de dominio (i.e. públicas o privadas):**
-
-```powershell
 New-NetFirewallRule -DisplayName "Block Vite 8123 on Public and Private" -Direction Inbound -LocalPort 8123 -Protocol TCP -Action Block -Profile Public,Private
-```
-
-**Y el servicio IP Helper debe estar corriendo para que portproxy funcione bien para conexiones externas:**
-
-```powershell
 Start-Service iphlpsvc
-```
-
-**Para eliminar la regla previa (si existe):**
-
-```powershell
 Remove-NetFirewallRule -DisplayName "Vite 8123" -ErrorAction SilentlyContinue
-```
-
-**Para ver todas las reglas activas:**
-
-```powershell
 Get-NetFirewallRule | Where-Object { $_.DisplayName -like "*8123*" } | Format-Table DisplayName, Enabled, Direction, Action
 ```
 
-### Acciones opcionales (troubleshooting)
+### Troubleshooting opcional
 
-**Agregar un `C:\Users\alejandro.garnung\.wslconfig` para hacer mirroring** (ver https://www.reddit.com/r/wsl2/comments/1ercy2f/how_to_run_vite_react_dev_server_from_wsl2ubuntu/), con:
+**`.wslconfig`** con networking mirrored ([referencia](https://www.reddit.com/r/wsl2/comments/1ercy2f/how_to_run_vite_react_dev_server_from_wsl2ubuntu/)):
 
 ```ini
 [network]
 networkingMode=mirrored
 ```
 
-**Permitir puerto desde WSL con ufw:**
+**UFW en WSL:**
 
 ```bash
 sudo apt install ufw
 sudo ufw allow 8123
 ```
 
-**Permitir desde Vite que otras máquinas accedan a la app desde la red:**
+**Vite accesible en red:**
 
 ```bash
 npm run dev -- --host
 ```
 
-**Crear una regla (desde el servidor Windows) que abra el puerto a absolutamente cualquier IP (no recomendado por seguridad):**
+**Regla permisiva (no recomendada):**
 
 ```powershell
 New-NetFirewallRule -DisplayName "Allow All Vite 8123" -Direction Inbound -LocalPort 8123 -Protocol TCP -Action Allow -Profile Any
-```
-
-**Y para eliminarla:**
-
-```powershell
 Remove-NetFirewallRule -DisplayName "Allow All Vite 8123"
 ```
+
+---
+
+## Documentación adicional
+
+- [Reconstrucción 3D: teoría y matemáticas](./assets/RECONSTRUCCION_3D.md)
+- [TODO / roadmap](./TODO.md) (e.g. paralelización con Web Workers)
+
+---
+
+## Estado de implementación
+
+- Múltiples sensores, ROI y movimientos complejos
+- Transformaciones inversas y exportación por sensor
+- Validación YAML, visualización en tiempo real, edición manual de poses
+- Tres servicios de intersección + prefiltro de visibilidad
+- Backend WebGPU/WebGL, carga de modelos y API REST de configuración

@@ -1,8 +1,8 @@
 # TODO
 
-- Implementar o bien la aceleración con WebGPU o bien con WebWorkers:
+## Implementar o bien la aceleración con WebGPU o bien con WebWorkers:
 
-#### Nota sobre aceleración GPU (compute shaders WebGPU)
+**Nota sobre aceleración GPU (compute shaders WebGPU)**
 
 Se exploró la posibilidad de ejecutar la búsqueda de intersecciones arista-plano del servicio **Edge** mediante compute shaders WGSL en WebGPU, con la idea de paralelizar el trabajo por triángulo en la GPU.
 
@@ -15,7 +15,7 @@ Para que los compute shaders fuesen beneficiosos habría que reenfocar la arquit
 
 La alternativa adoptada para acelerar el escaneo sin perder la visualización en tiempo real son **Web Workers** (ver sección siguiente).
 
-#### Aceleración con Web Workers (scan paralelo)
+**Aceleración con Web Workers (scan paralelo)**
 
 El simulador soporta paralelizar el cálculo de perfiles de escaneo usando **Web Workers**, una API estándar del navegador que lanza hilos reales del sistema operativo (uno por núcleo de CPU).
 

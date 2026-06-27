@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import TransformationService from '../services/TransformationService.js';
+import SensorNoiseService from '../services/SensorNoiseService.js';
 
 export default class Sensor {
   constructor(config) {
@@ -31,6 +32,11 @@ export default class Sensor {
     
     // Movimientos del sensor (opcional)
     this.movements = config.movements || [];
+
+    // Ruido de adquisición (override por sensor; se combina con defaultNoise de simulación)
+    this.noiseOverride = config.noise || null;
+    this.defaultNoise = config.defaultNoise || null;
+    this._noiseConfig = SensorNoiseService.resolveNoiseConfig(this.defaultNoise, this.noiseOverride);
     
     // Pose actual (se actualiza durante el escaneo)
     this.currentPose = {
@@ -114,5 +120,19 @@ export default class Sensor {
       profileIndex,
       totalProfiles
     );
+  }
+
+  getNoiseConfig() {
+    return this._noiseConfig;
+  }
+
+  setDefaultNoise(defaultNoise) {
+    this.defaultNoise = defaultNoise || null;
+    this._noiseConfig = SensorNoiseService.resolveNoiseConfig(this.defaultNoise, this.noiseOverride);
+  }
+
+  setNoiseOverride(noiseOverride) {
+    this.noiseOverride = noiseOverride || null;
+    this._noiseConfig = SensorNoiseService.resolveNoiseConfig(this.defaultNoise, this.noiseOverride);
   }
 }

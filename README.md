@@ -74,6 +74,7 @@ cp public/configs/simulator.example.yaml public/configs/simulator.yaml
    - Para cada sensor:
      - Se calcula la pose del sensor según sus movimientos.
      - Se intersecta el plano láser (ROI trapezoidal) con la malla.
+     - Se aplica ruido sintético opcional a cada punto capturado (`SensorNoiseService`).
      - Se almacenan los puntos del perfil (por sensor).
 3. Al finalizar, se restauran las poses iniciales.
 
@@ -109,7 +110,7 @@ UI (index.html)
 | **Model** | `Sensor.js`, `PointCloud.js` |
 | **ViewModel** | `SimulationViewModel.js`, commands (`Start` / `Stop` / `Reset`) |
 | **View** | `ThreeView.js` |
-| **Services** | `EdgePlaneIntersectionService`, `FacePlaneIntersectionService`, `RaycastingIntersectionService`, `TransformationService`, `ScanExportService`, `ModelLoader`, `ConfigValidationService`, `ProfileRenderer2D` |
+| **Services** | `EdgePlaneIntersectionService`, `FacePlaneIntersectionService`, `RaycastingIntersectionService`, `TransformationService`, `ScanExportService`, `ModelLoader`, `ConfigValidationService`, `ProfileRenderer2D`, `SensorNoiseService` |
 
 **Flujo:** controles UI → comandos ViewModel → modelos/servicios → notificación a `ThreeView` → actualización de escena y canvas 2D de perfiles.
 
@@ -128,9 +129,9 @@ Referencia comentada: `public/configs/simulator.example.yaml`.
 |---------|-----------|
 | `scene`, `camera`, `lights` | Escena Three.js |
 | `models.object` | Ruta del objeto a escanear |
-| `sensors[]` | `id`, `model`, `pointsPerProfile`, `pose`, `roi`, `movements` |
+| `sensors[]` | `id`, `model`, `pointsPerProfile`, `pose`, `roi`, `movements`, `noise` (opcional) |
 | `object` | `initialPose`, `movements` |
-| `simulation` | `intersectionMethod`, `defaultProfiles`, `offsetZ`, `rendererBackend`, etc. |
+| `simulation` | `intersectionMethod`, `defaultProfiles`, `offsetZ`, `rendererBackend`, `acquisitionNoise`, etc. |
 
 ### Ejemplo mínimo
 
@@ -189,6 +190,51 @@ Selector en la GUI (persistido en YAML como `simulation.intersectionMethod`):
 **Backend de render:** Auto (preferir WebGPU), WebGL o WebGPU. Si WebGPU no está disponible, fallback automático a WebGL.
 
 ![Edge vs Face](./assets/edge_vs_face_intersection.png)
+
+---
+
+## Ruido en adquisiciones
+
+El simulador puede añadir **ruido sintético** a cada punto capturado, emulando la incertidumbre de sensores reales. Por ahora está implementado el **ruido gaussiano**; la arquitectura (`SensorNoiseService`) permite extender a ruido impulsional, estructurado u otras distribuciones.
+
+### Cuándo se aplica
+
+Tras la intersección geométrica y **antes** de almacenar/exportar el perfil. El ruido se aplica en **coordenadas locales del sensor** y el punto resultante se devuelve a coordenadas del mundo.
+
+- **Eje Y local** (profundidad): incertidumbre típica del perfilómetro láser.
+- **Ejes X/Z locales**: opcionales mediante `stdDev: { x, y, z }`.
+
+### Configuración
+
+Global (todos los sensores salvo override):
+
+```yaml
+simulation:
+  acquisitionNoise:
+    enabled: true
+    type: gaussian
+    stdDev: 0.00005    # 50 µm en profundidad (metros)
+    seed: 42           # opcional, resultados reproducibles
+```
+
+Por sensor (sobreescribe la configuración global):
+
+```yaml
+sensors:
+  - id: sensor_1
+    noise:
+      enabled: true
+      stdDev: 0.0001   # 100 µm solo en este sensor
+```
+
+### Interfaz
+
+En **Modo de Escaneo**:
+
+- **Ruido gaussiano en adquisición**: activar/desactivar.
+- **σ profundidad (µm)**: desviación típica en micrómetros (se persiste en `simulator.yaml`).
+
+Los valores se guardan en `simulation.acquisitionNoise` al cambiar los controles.
 
 ---
 

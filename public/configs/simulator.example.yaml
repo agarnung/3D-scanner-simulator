@@ -82,6 +82,12 @@ sensors:
       x3: 0.15                # Límite derecho inferior
     # Movimientos del sensor (opcional)
     movements: []              # Sin movimientos para este sensor
+    # Ruido de adquisición específico de este sensor (opcional; sobreescribe simulation.acquisitionNoise)
+    # noise:
+    #   enabled: true
+    #   type: gaussian
+    #   stdDev: 0.0001         # 100 µm en profundidad (eje Y local)
+    #   seed: 123
 
   # Sensor 2: Sensor con rotación durante el escaneo
   - id: 'sensor_2'
@@ -192,6 +198,15 @@ simulation:
   defaultRotationDeg: 360      # Grados totales de rotación por defecto
   defaultProfiles: 4096        # Número de perfiles
   offsetZ: 0.001              # Offset Z para reconstrucción (desplazamiento entre perfiles)
+
+  # Ruido sintético en las adquisiciones del sensor (global; cada sensor puede sobreescribir con sensors[].noise)
+  acquisitionNoise:
+    enabled: false             # Activar/desactivar ruido gaussiano
+    type: gaussian             # Tipo de ruido (extensible: impulse, structured, ...)
+    stdDev: 0.00005            # Desviación típica en metros (0.00005 = 50 µm) en eje Y local (profundidad)
+    # stdDev por eje (alternativa al escalar anterior):
+    # stdDev: { x: 0, y: 0.00005, z: 0 }
+    # seed: 42                 # Semilla opcional para resultados reproducibles
 
 # ============================================================================
 # NOTAS Y EJEMPLOS ADICIONALES

@@ -127,6 +127,70 @@ async function saveRendererBackendToYAML(backend) {
     }
 }
 
+async function saveAcquisitionNoiseToYAML(acquisitionNoise) {
+    const currentConfig = await loadConfig();
+    currentConfig.simulation = currentConfig.simulation || {};
+    currentConfig.simulation.acquisitionNoise = acquisitionNoise;
+
+    const response = await fetch('/api/save-config', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(currentConfig)
+    });
+
+    if (!response.ok) {
+        throw new Error(`Error al guardar ruido de adquisición: ${response.statusText}`);
+    }
+}
+
+function metersToMicrometers(valueMeters) {
+    return Math.round((Number(valueMeters) || 0) * 1e6);
+}
+
+function micrometersToMeters(valueMicrometers) {
+    return Math.max(0, Number(valueMicrometers) || 0) / 1e6;
+}
+
+function getStdDevYFromNoiseConfig(acquisitionNoise) {
+    if (!acquisitionNoise?.stdDev) return 0;
+    if (typeof acquisitionNoise.stdDev === 'number') {
+        return acquisitionNoise.stdDev;
+    }
+    return Number(acquisitionNoise.stdDev.y) || 0;
+}
+
+function buildAcquisitionNoiseFromUI(enabled, stdDevMicrometers) {
+    return {
+        enabled: !!enabled,
+        type: 'gaussian',
+        stdDev: micrometersToMeters(stdDevMicrometers)
+    };
+}
+
+function applyAcquisitionNoiseToViewModel(viewModel, acquisitionNoise) {
+    if (!viewModel) return;
+    viewModel.setAcquisitionNoise(acquisitionNoise);
+}
+
+function syncAcquisitionNoiseUIFromConfig(currentConfig, viewModel) {
+    const enabledToggle = document.getElementById('acquisition-noise-enabled');
+    const stdDevInput = document.getElementById('acquisition-noise-stddev');
+    if (!enabledToggle || !stdDevInput) return;
+
+    const acquisitionNoise = currentConfig?.simulation?.acquisitionNoise || {
+        enabled: false,
+        type: 'gaussian',
+        stdDev: 0
+    };
+
+    enabledToggle.checked = !!acquisitionNoise.enabled;
+    stdDevInput.value = metersToMicrometers(getStdDevYFromNoiseConfig(acquisitionNoise));
+    stdDevInput.disabled = !acquisitionNoise.enabled;
+    applyAcquisitionNoiseToViewModel(viewModel, acquisitionNoise);
+}
+
 function applyVisibilityPrefilterSettingToService(serviceClass, enabled) {
     if (!serviceClass) return;
     if (Object.prototype.hasOwnProperty.call(serviceClass, 'enableVisibilityPrefilter')) {
@@ -377,6 +441,7 @@ async function reloadConfiguration() {
         if (freshConfig) {
             // Actualizar referencia global de config
             Object.assign(config, freshConfig);
+            syncAcquisitionNoiseUIFromConfig(config, viewModel);
         }
         
         console.log('Configuración recargada correctamente');
@@ -423,6 +488,8 @@ function setupEventListeners() {
     const rendererBackendSelect = document.getElementById('renderer-backend-selector');
     const rendererBackendActiveBadge = document.getElementById('renderer-backend-active');
     const visibilityPrefilterToggle = document.getElementById('visibility-prefilter-toggle');
+    const acquisitionNoiseEnabledToggle = document.getElementById('acquisition-noise-enabled');
+    const acquisitionNoiseStdDevInput = document.getElementById('acquisition-noise-stddev');
     const intersectionMethodSelect = document.getElementById('intersection-method-selector');
 
     const updateRendererBackendBadge = (activeBackend, pending = false) => {
@@ -754,6 +821,39 @@ if (realtimeSpeedInput && realtimeSpeedDisplay) {
                 console.error('Error guardando prefiltro de visibilidad:', error);
                 alert('No se pudo guardar el prefiltro de visibilidad en simulator.yaml');
             }
+        });
+    }
+
+    const persistAcquisitionNoise = async (acquisitionNoise) => {
+        config.simulation = config.simulation || {};
+        config.simulation.acquisitionNoise = acquisitionNoise;
+        applyAcquisitionNoiseToViewModel(viewModel, acquisitionNoise);
+
+        try {
+            await saveAcquisitionNoiseToYAML(acquisitionNoise);
+            console.log('Ruido de adquisición guardado en YAML:', acquisitionNoise);
+        } catch (error) {
+            console.error('Error guardando ruido de adquisición:', error);
+            alert('No se pudo guardar el ruido de adquisición en simulator.yaml');
+        }
+    };
+
+    if (acquisitionNoiseEnabledToggle && acquisitionNoiseStdDevInput) {
+        syncAcquisitionNoiseUIFromConfig(config, viewModel);
+
+        acquisitionNoiseEnabledToggle.addEventListener('change', async (e) => {
+            const enabled = e.target.checked;
+            acquisitionNoiseStdDevInput.disabled = !enabled;
+            const acquisitionNoise = buildAcquisitionNoiseFromUI(enabled, acquisitionNoiseStdDevInput.value);
+            await persistAcquisitionNoise(acquisitionNoise);
+        });
+
+        acquisitionNoiseStdDevInput.addEventListener('change', async (e) => {
+            const acquisitionNoise = buildAcquisitionNoiseFromUI(
+                acquisitionNoiseEnabledToggle.checked,
+                e.target.value
+            );
+            await persistAcquisitionNoise(acquisitionNoise);
         });
     }
 

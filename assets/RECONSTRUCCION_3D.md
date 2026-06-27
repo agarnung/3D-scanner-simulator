@@ -196,6 +196,14 @@ Los puntos se almacenan **en coordenadas del mundo**:
 profile[i][j] = P_intersection_world
 ```
 
+Opcionalmente, si `simulation.acquisitionNoise.enabled` (o `sensors[].noise`) está activo, cada punto pasa por `SensorNoiseService` antes del almacenamiento:
+
+```
+P_noisy_local = P_local + ε,   ε ~ N(0, σ²) por eje
+P_noisy_world = transformToWorld(P_noisy_local, sensor)
+profile[i][j] = P_noisy_world
+```
+
 Donde:
 - `i`: Índice del perfil del escaneo
 - `j`: Índice del punto dentro del perfil

@@ -11,6 +11,7 @@ import ResetScanCommand from './commands/ResetScanCommand.js';
 import ProfileRenderer2D from '../services/ProfileRenderer2D.js';
 
 import ScanExportService from '../services/ScanExportService.js';
+import SensorNoiseService from '../services/SensorNoiseService.js';
 
 export default class SimulationViewModel {
   constructor({ pointsPerProfile = 300, onShowLoadingPopup, onHideLoadingPopup, config, intersectionService } = {}) {
@@ -247,7 +248,9 @@ export default class SimulationViewModel {
           pointsPerProfile: sensorConfig.pointsPerProfile,
           pose: sensorConfig.pose,
           roi: sensorConfig.roi,
-          movements: sensorConfig.movements || []
+          movements: sensorConfig.movements || [],
+          noise: sensorConfig.noise,
+          defaultNoise: this.config?.simulation?.acquisitionNoise
         });
         
         this.sensors.push(sensor);
@@ -402,12 +405,13 @@ export default class SimulationViewModel {
         // Realizar el escaneo con cada sensor
         for (const sensor of this.sensors) {
           // Realizar el escaneo con este sensor
-          const profile = this.intersectionService.intersectLaserProfile(
+          const rawProfile = this.intersectionService.intersectLaserProfile(
             this.object.mesh,
             sensor,
             sensor.pointsPerProfile,
             this.surfaceOnlyMode
           );
+          const profile = SensorNoiseService.apply(rawProfile, sensor, i);
 
           // Visualizar siempre para el sensor seleccionado (incluso si no hay puntos)
           // Cambiar el i % 1 === 0 a otro valor en vez de 1 para actualizar menos frecuentemente
@@ -813,5 +817,18 @@ export default class SimulationViewModel {
    */
   setRealTimeDuration(duration) {
     this.realTimeDuration = Math.max(1.0, Math.min(60.0, duration)); // Limitar entre 1 y 60 segundos
+  }
+
+  /**
+   * Actualiza el ruido de adquisición global (simulation.acquisitionNoise) en todos los sensores.
+   */
+  setAcquisitionNoise(acquisitionNoise) {
+    this.config.simulation = this.config.simulation || {};
+    this.config.simulation.acquisitionNoise = acquisitionNoise;
+    this.sensors.forEach(sensor => sensor.setDefaultNoise(acquisitionNoise));
+  }
+
+  getAcquisitionNoise() {
+    return this.config?.simulation?.acquisitionNoise || { enabled: false, type: 'gaussian', stdDev: 0 };
   }
 }

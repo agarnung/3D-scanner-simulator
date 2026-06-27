@@ -114,6 +114,18 @@
                     </label>
                 </div>
                 <div class="control-group">
+                    <label for="acquisition-noise-enabled" title="Añade ruido sintético gaussiano a cada punto capturado (coordenadas locales del sensor)">
+                        <input type="checkbox" id="acquisition-noise-enabled">
+                        Ruido gaussiano en adquisición
+                    </label>
+                </div>
+                <div class="control-group">
+                    <label for="acquisition-noise-stddev" title="Desviación típica en el eje Y local del sensor (profundidad). Valor en micrómetros.">
+                        σ profundidad (µm)
+                    </label>
+                    <input type="number" id="acquisition-noise-stddev" min="0" step="1" value="50">
+                </div>
+                <div class="control-group">
                     <label for="renderer-backend-selector" title="Selecciona el backend de render: WebGPU (si disponible) o WebGL">
                         Backend de render
                     </label>

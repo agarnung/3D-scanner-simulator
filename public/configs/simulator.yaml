@@ -100,3 +100,7 @@ simulation:
   defaultRotationDeg: 360
   defaultProfiles: 4096
   offsetZ: 0.001
+  acquisitionNoise:
+    enabled: false
+    type: gaussian
+    stdDev: 0.00005

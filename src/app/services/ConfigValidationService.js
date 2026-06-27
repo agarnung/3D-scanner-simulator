@@ -103,6 +103,10 @@ export default class ConfigValidationService {
       });
     }
 
+    if (sensor.noise) {
+      errors.push(...this.validateAcquisitionNoise(sensor.noise, `${prefix}, noise`));
+    }
+
     return errors;
   }
 
@@ -196,6 +200,56 @@ export default class ConfigValidationService {
 
     if (simulation.rendererBackend !== undefined && !['auto', 'webgl', 'webgpu'].includes(simulation.rendererBackend)) {
       errors.push('Simulación: \'rendererBackend\' debe ser \'auto\', \'webgl\' o \'webgpu\'');
+    }
+
+    if (simulation.acquisitionNoise) {
+      errors.push(...this.validateAcquisitionNoise(simulation.acquisitionNoise, 'Simulación, acquisitionNoise'));
+    }
+
+    return errors;
+  }
+
+  /**
+   * Valida la configuración de ruido en adquisiciones.
+   * @param {Object} noise
+   * @param {string} prefix
+   */
+  static validateAcquisitionNoise(noise, prefix) {
+    const errors = [];
+
+    if (typeof noise !== 'object' || noise === null) {
+      errors.push(`${prefix}: debe ser un objeto`);
+      return errors;
+    }
+
+    if (noise.enabled !== undefined && typeof noise.enabled !== 'boolean') {
+      errors.push(`${prefix}: 'enabled' debe ser booleano`);
+    }
+
+    if (noise.type !== undefined && !['gaussian'].includes(noise.type)) {
+      errors.push(`${prefix}: 'type' debe ser 'gaussian' (otros tipos se añadirán en el futuro)`);
+    }
+
+    if (noise.stdDev !== undefined) {
+      if (typeof noise.stdDev === 'number') {
+        if (noise.stdDev < 0) {
+          errors.push(`${prefix}: 'stdDev' debe ser un número no negativo`);
+        }
+      } else if (typeof noise.stdDev === 'object' && noise.stdDev !== null) {
+        for (const axis of ['x', 'y', 'z']) {
+          if (noise.stdDev[axis] !== undefined) {
+            if (typeof noise.stdDev[axis] !== 'number' || noise.stdDev[axis] < 0) {
+              errors.push(`${prefix}: 'stdDev.${axis}' debe ser un número no negativo`);
+            }
+          }
+        }
+      } else {
+        errors.push(`${prefix}: 'stdDev' debe ser un número o un objeto { x, y, z }`);
+      }
+    }
+
+    if (noise.seed !== undefined && noise.seed !== null && typeof noise.seed !== 'number') {
+      errors.push(`${prefix}: 'seed' debe ser un número o null`);
     }
 
     return errors;
